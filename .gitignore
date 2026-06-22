@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Local Claude Code settings (machine-specific). launch.json is kept so others can run the preview.
+.claude/settings.local.json
+
+# Editor cruft
+*.swp
+*~

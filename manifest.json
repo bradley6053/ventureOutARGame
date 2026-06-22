@@ -1,0 +1,25 @@
+{
+  "name": "Marley's Treasure Hunt — A Venture Out Adventure",
+  "short_name": "Treasure Hunt",
+  "description": "An offline beach treasure hunt for the Venture Out crew. Look through the screen, spot treasures around the resort, and tap to collect them!",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0D2B3E",
+  "theme_color": "#1B7A8C",
+  "icons": [
+    {
+      "src": "./assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

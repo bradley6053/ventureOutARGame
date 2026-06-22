@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1">
+<title>Marley's Treasure Hunt — A Venture Out Adventure</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#1B7A8C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Treasure Hunt">
+<link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon-180.png">
+<link rel="icon" href="./assets/icons/icon-192.png">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 1 — TITLE
+  ═══════════════════════════════════════════ -->
+  <section class="screen screen--active" id="screen-title">
+
+    <!-- Background decoration layer -->
+    <div class="title-bg" aria-hidden="true">
+      <div class="title-bg__waves"></div>
+      <div class="title-bg__stars">
+        <span class="deco-star" style="--x:10%;--y:12%;--s:1.1;--d:0s">⭐</span>
+        <span class="deco-star" style="--x:88%;--y:8%;--s:0.8;--d:0.4s">✨</span>
+        <span class="deco-star" style="--x:5%;--y:55%;--s:0.9;--d:0.7s">⭐</span>
+        <span class="deco-star" style="--x:92%;--y:48%;--s:1.2;--d:0.2s">✨</span>
+        <span class="deco-star" style="--x:18%;--y:80%;--s:0.7;--d:1s">⭐</span>
+        <span class="deco-star" style="--x:80%;--y:78%;--s:1;--d:0.6s">✨</span>
+      </div>
+    </div>
+
+    <!-- Logo -->
+    <div class="title-logo-wrap">
+      <img src="./assets/ventureoutlogo.jpeg" alt="Venture Out" class="title-logo">
+    </div>
+
+    <!-- Main title card -->
+    <div class="title-card">
+      <h1 class="title-main">Marley's<br>Treasure Hunt</h1>
+      <p class="title-sub">A Venture Out Adventure</p>
+    </div>
+
+    <!-- Hero scene -->
+    <div class="title-hero" aria-label="Marley the marlin, pirates, and treasure">
+      <div class="hero-scene">
+        <span class="hero-pirate">🏴‍☠️</span>
+        <span class="hero-marley">🐠</span>
+        <span class="hero-treasure">💰</span>
+        <span class="hero-shell1">🐚</span>
+        <span class="hero-shell2">🌊</span>
+        <span class="hero-palm">🌴</span>
+      </div>
+    </div>
+
+    <!-- CTA button -->
+    <button id="btnStart" class="btn btn--primary btn--xl">
+      ⚓ Start the Adventure!
+    </button>
+
+    <!-- Footer note -->
+    <footer class="title-footer">
+      Made for the Venture Out crew 🌴
+    </footer>
+
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 2 — MAP
+  ═══════════════════════════════════════════ -->
+  <section class="screen" id="screen-map">
+
+    <!-- HUD (top bar) -->
+    <div id="hud">
+      <div id="zoneChip" class="chip chip--zone">
+        <span id="zoneName">The Lagoon &amp; Fishing Pier</span>
+      </div>
+      <div id="scoreChip" class="chip chip--score">
+        ⭐ <span id="scoreValue">0</span>
+      </div>
+      <div id="mapPieceChip" class="chip chip--map">
+        🗺️ <span id="mapPieceValue">0</span>/5
+      </div>
+    </div>
+
+    <!-- Map viewport -->
+    <div id="mapViewport">
+      <img id="mapImg" src="./assets/map/resort-map.jpg" alt="Resort map">
+      <div id="treasureLayer"></div>
+      <div id="playerDot"><span>⛵</span></div>
+    </div>
+
+    <!-- Proximity prompt (floats over map) -->
+    <div id="proximityPrompt" class="hidden">
+      Treasure nearby — tap it! ✨
+    </div>
+
+    <!-- Calibration hint (floats over map) -->
+    <div id="calibrateHint" class="hint hidden"></div>
+
+    <!-- Bottom control bar -->
+    <div id="mapControls">
+      <button id="btnOpenBag" class="btn btn--ghost">👝 Bag</button>
+      <button id="btnCalibrate" class="btn btn--ghost">📍 Calibrate</button>
+      <button id="btnWeMadeIt" class="btn btn--primary">We made it! →</button>
+    </div>
+
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 3 — CATCH (AR camera view)
+  ═══════════════════════════════════════════ -->
+  <section class="screen" id="screen-catch">
+
+    <!-- Camera feed — full-bleed background -->
+    <video id="cameraVideo" autoplay muted playsinline></video>
+
+    <!-- JS-injected catch treasure lives here -->
+    <div id="catchLayer"></div>
+
+    <!-- Hint text -->
+    <div id="catchHint">Tap the treasure to catch it! 👆</div>
+
+    <!-- Back button -->
+    <button id="btnCatchBack" class="btn btn--ghost">← Back to map</button>
+
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 4 — BAG
+  ═══════════════════════════════════════════ -->
+  <section class="screen" id="screen-bag">
+
+    <div class="bag-inner">
+      <h2 class="screen-heading">
+        <span class="screen-heading__emoji">👝</span>
+        My Treasure Bag
+      </h2>
+
+      <div id="bagGrid"></div>
+
+      <div id="bagTotal"></div>
+
+      <button id="btnBagBack" class="btn btn--primary">← Keep hunting</button>
+    </div>
+
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 5 — WIN
+  ═══════════════════════════════════════════ -->
+  <section class="screen" id="screen-win">
+
+    <div class="win-bg" aria-hidden="true"></div>
+
+    <div class="win-inner">
+
+      <!-- Celebration graphic -->
+      <div class="win-chest" aria-label="treasure chest">
+        <span class="win-chest__main">💰</span>
+        <span class="win-chest__deco win-chest__deco--1">✨</span>
+        <span class="win-chest__deco win-chest__deco--2">⭐</span>
+        <span class="win-chest__deco win-chest__deco--3">🏅</span>
+        <span class="win-chest__deco win-chest__deco--4">✨</span>
+      </div>
+
+      <h2 class="win-headline">
+        You found<br>Captain Barnacle's<br>treasure!
+      </h2>
+
+      <div id="winScore"></div>
+
+      <button id="btnPlayAgain" class="btn btn--primary btn--xl">
+        Play again 🔁
+      </button>
+
+    </div>
+
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════
+       OVERLAYS (outside all screens)
+  ═══════════════════════════════════════════ -->
+
+  <!-- Marley's speech bubble -->
+  <div id="marleyBubble" class="marley hidden">
+    <span class="marley__avatar">🐠</span>
+    <p id="marleyText"></p>
+  </div>
+
+  <!-- Zone intro banner -->
+  <div id="zoneBanner" class="banner hidden">
+    <span id="zoneBannerEmoji">🏝️</span>
+    <h2 id="zoneBannerName"></h2>
+  </div>
+
+  <!-- Safety modal -->
+  <div id="safetyCard" class="modal hidden">
+    <div class="modal__box">
+      <span class="modal__emoji">🛟</span>
+      <p id="safetyText"></p>
+      <button id="btnSafetyOk" class="btn btn--primary">Aye aye, Captain! 🫡</button>
+    </div>
+  </div>
+
+  <!-- Offline gate / status banner -->
+  <div id="offlineGate" class="gate hidden">
+    <span id="offlineGateIcon">⏳</span>
+    <span id="offlineGateText">Getting ready…</span>
+  </div>
+
+</div><!-- /#app -->
+
+<script src="./game.js" defer></script>
+</body>
+</html>
