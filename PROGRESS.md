@@ -51,6 +51,7 @@ Offline, Pokémon-GO-style location-based AR treasure hunt for Brad's kids (5–
 - Implementation complexity: **62/100**.
 
 ## Notes for future-you
+- **Practice Mode** (green toggle on the title screen) lets you test the full GPS experience anywhere — on the first fix it re-centers the resort map on your current location with a tight span (`CONFIG.practiceSpanM` = 250m), so a short neighborhood loop covers all zones. A real on-site Calibrate turns it off. (Added 2026-06-22; SW now `voar-v3`.)
 - **Fonts** are self-hosted in `assets/fonts/` (Ribeye = display headlines via `--font-display`; Fredoka variable = body/UI via `--font-fun`/`--font-body`). To change one: download its `.woff2`, update the `@font-face` + token in `styles.css`, add the file to `sw.js` precache, and bump `CACHE_VERSION`. (Added 2026-06-22, replacing the generic Chalkboard/Comic Sans system stack. SW is now `voar-v2`.)
 - After editing ANY file, **bump `CACHE_VERSION` in `sw.js`** so installed phones refresh.
 - During local dev the cache-first SW serves stale files — clear it (DevTools → Application → Service Workers/Storage) or run `MTH.reset()` after edits.

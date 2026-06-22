@@ -1274,3 +1274,26 @@ body.no-camera #screen-catch {
   animation: pulse 1.1s ease-in-out infinite;
   filter: brightness(1.08) saturate(1.1);
 }
+
+/* Practice Mode toggle on the title screen (testing aid, away from the resort). */
+.title-practice {
+  position: relative;
+  z-index: 1;
+  order: 6;
+  margin-top: 10px;
+  min-height: 44px;
+  padding: 8px 18px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-fun);
+  font-size: clamp(.72rem, 2.4vw, .9rem);
+  color: rgba(255,255,255,.78);
+  background: rgba(19,52,63,.45);
+  border: 1.5px solid rgba(255,255,255,.28);
+  -webkit-tap-highlight-color: transparent;
+}
+.title-practice--on {
+  color: #0E2A1B;
+  background: var(--green-ok);
+  border-color: #fff;
+  font-weight: 700;
+}

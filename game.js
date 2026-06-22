@@ -26,6 +26,7 @@ const CONFIG = {
 
   catchRadiusM: 25,       // how close (meters) before a treasure can be tapped
   spawnEveryMeters: 30,   // GPS backup: drop a treasure near you every N meters driven
+  practiceSpanM: 250,     // Practice Mode: real-world meters that map to the full resort map
   ambientTreasures: 4,    // how many treasures float on the map per zone
   safetyReminderMs: 150000, // gentle "stay seated" reminder cadence (2.5 min)
 
@@ -129,6 +130,8 @@ function freshState() {
     pieces: 0,            // map pieces / chest collected (0..5)
     collected: {},        // emoji -> count, for the Treasure Bag
     calibration: null,    // {a,b,tx,ty,lat0,lng0} once calibrated on-site
+    practice: false,      // Practice Mode: treat your current location as the resort
+    practiceOrigin: null, // {lat,lng} captured on the first fix in Practice Mode
     done: false,
   };
 }
@@ -154,6 +157,13 @@ function projectMeters(lat, lng, lat0, lng0) {
 // lat/lng -> {fx,fy} fraction of the map image (0..1). Uses on-site calibration
 // when available; otherwise a rough pre-seed so the dot at least moves.
 function gpsToFraction(lat, lng) {
+  // Practice Mode: center the map on wherever you started, tight span so a short
+  // neighborhood loop covers the whole resort.
+  if (state.practice && state.practiceOrigin) {
+    const p = projectMeters(lat, lng, state.practiceOrigin.lat, state.practiceOrigin.lng);
+    const span = CONFIG.practiceSpanM;
+    return clampFrac(0.5 + p.x / span, 0.5 - p.y / span);
+  }
   const c = state.calibration;
   if (c) {
     const { x, y } = projectMeters(lat, lng, c.lat0, c.lng0);
@@ -225,6 +235,11 @@ function enterExplorer() {
 function onPosition(pos) {
   if (mode !== 'gps') return;
   const { latitude, longitude } = pos.coords;
+  if (state.practice && !state.practiceOrigin) {
+    state.practiceOrigin = { lat: latitude, lng: longitude };
+    save();
+    marley("Practice Mode on! Your spot is now the resort — drive around to explore the whole map. 🏠🗺️", 6500);
+  }
   playerFrac = gpsToFraction(latitude, longitude);
   positionPlayerDot();
   // distance-based backup spawner so there's always something to catch
@@ -456,6 +471,13 @@ function updateHUD() {
   setText('zoneName', zone().name);
 }
 
+function updatePracticeBtn() {
+  const b = $('btnPractice');
+  if (!b) return;
+  b.textContent = state.practice ? '🏠 Practice Mode: ON' : '🏠 Practice Mode: OFF';
+  b.classList.toggle('title-practice--on', state.practice);
+}
+
 let marleyTimer = null;
 function marley(text, ms = 5000) {
   const bub = $('marleyBubble');
@@ -534,6 +556,7 @@ function onMapTap(ev) {
     setText('calibrateHint', CAL_PROMPTS[calStep]);
   } else {
     state.calibration = solveCalibration(calPoints[0], calPoints[1]);
+    state.practice = false; // a real on-site calibration replaces Practice Mode
     save();
     calibrating = false;
     hide($('calibrateHint'));
@@ -690,6 +713,13 @@ function startGame() {
 
 function bindUI() {
   on($('btnStart'), 'click', () => { playTap(); startGame(); });
+  on($('btnPractice'), 'click', () => {
+    playTap();
+    state.practice = !state.practice;
+    state.practiceOrigin = null; // re-capture on the next GPS fix
+    save();
+    updatePracticeBtn();
+  });
   on($('btnOpenBag'), 'click', () => { playTap(); renderBag(); showScreen('screen-bag'); });
   on($('btnBagBack'), 'click', () => { playTap(); showScreen('screen-map'); });
   on($('btnCalibrate'), 'click', () => { playTap(); startCalibrate(); });
@@ -718,6 +748,7 @@ function boot() {
   bindUI();
   registerSW();
   updateHUD();
+  updatePracticeBtn();
   setText('zoneName', zone().name);
   showScreen('screen-title');
 }
@@ -740,6 +771,7 @@ window.MTH = {
   give: (emoji = '🪙') => { const t = spawnTreasure({ collectable: true }); if (t) { t.emoji = emoji; t.el.textContent = emoji; } },
   zone: (i) => { state.zoneIndex = Math.max(0, Math.min(CONFIG.zones.length - 1, i)); startZone(true); },
   win: () => win(),
+  practice: () => { state.practice = true; state.practiceOrigin = null; save(); updatePracticeBtn(); return 'practice on'; },
   reset: () => { localStorage.removeItem(SAVE_KEY); location.reload(); },
 };
 })();

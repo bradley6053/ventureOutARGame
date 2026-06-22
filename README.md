@@ -37,6 +37,11 @@ It runs **100% offline** once loaded, so it works on the cart with no Wi-Fi or c
 
 ---
 
+## 🏠 Test it away from the resort (Practice Mode)
+Not in Florida yet? On the title screen tap **🏠 Practice Mode: ON**, then **Start the Adventure**. The first GPS fix makes wherever you're standing the center of the resort map — about **250m of your neighborhood maps to the whole resort** — so your boat moves and the zones trigger as you walk or drive around the block. It's a true GPS dress-rehearsal. Turn it **OFF** (or just do a real **📍 Calibrate** once you're at Venture Out) to switch back to the real resort positions. (Tune the area with `CONFIG.practiceSpanM` in `game.js`.)
+
+---
+
 ## 🌐 Host it for free (so you have a web address)
 
 **Option A — GitHub Pages (recommended):**
