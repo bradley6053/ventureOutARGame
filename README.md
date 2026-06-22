@@ -10,8 +10,8 @@ It runs **100% offline** once loaded, so it works on the cart with no Wi-Fi or c
 
 ## How to play
 1. Tap **Start the Adventure**.
-2. Drive the cart. Your boat ⛵ moves on the resort map. When a treasure starts glowing, **tap it**.
-3. The camera opens with the treasure floating in front — **tap it to catch it!** 🎉
+2. Drive the cart. Your boat ⛵ moves on the resort map and shows a **beam for which way you're facing**. When a treasure starts glowing, **tap it**.
+3. The camera opens with the treasure anchored **out in the real world** — **look around** to find it (an arrow points the way if it's off-screen), then **tap it to catch it!** 🎉
 4. Each zone hides a **map piece** 🗺️. Collect all 5 to reveal the **Grand Chest** 🧰 at the beach.
 5. **Stay seated and keep the phone inside the cart** — Marley reminds everyone, especially when crossing **Thomas Drive**.
 
@@ -21,7 +21,7 @@ It runs **100% offline** once loaded, so it works on the cart with no Wi-Fi or c
 
 ## 📱 Put it on the iPhone (do this on the condo Wi-Fi first!)
 1. Open the game's web address in **Safari** (it must be Safari to install it as an app).
-2. Tap **Start the Adventure** once, and **Allow** when it asks for **Location** and **Camera**.
+2. Tap **Start the Adventure** once, and **Allow** when it asks for **Location**, **Camera**, and **Motion & Orientation** (the last one powers the compass + AR).
 3. Wait for the green **"✅ Ready to play offline!"** banner at the bottom.
 4. Tap the **Share** button → **Add to Home Screen**. Now launch the game from its new home-screen icon.
 5. Let it sit ~10 seconds so the GPS gets its first lock (faster on Wi-Fi).

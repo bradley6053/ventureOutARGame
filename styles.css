@@ -1297,3 +1297,70 @@ body.no-camera #screen-catch {
   border-color: #fff;
   font-weight: 700;
 }
+
+
+/* ── 21. COMPASS BEAM + WORLD-ANCHORED AR (Opus) ────────────── */
+
+/* Facing beam on the boat — a flashlight cone from the player dot that rotates
+   to show which way the phone is pointing. Hidden until the sensors are live.
+   At --face:0 it points straight up (= north on the map). */
+#facingBeam {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-left: 26px solid transparent;
+  border-right: 26px solid transparent;
+  border-top: 64px solid rgba(255, 201, 64, .42);
+  transform-origin: 50% 100%;              /* apex = boat centre */
+  transform: translate(-50%, -100%) rotate(var(--face, 0deg));
+  filter: blur(0.5px) drop-shadow(0 0 7px rgba(255, 201, 64, .55));
+  pointer-events: none;
+  z-index: -1;                             /* behind the ⛵ emoji */
+  transition: transform .12s linear;       /* smooth out compass jitter */
+}
+body.has-orientation #facingBeam { display: block; }
+
+/* AR mode: JS positions + sizes the catch treasure from the sensors, so silence
+   the idle float keyframe (the celebratory caught-pop still plays). A hair of
+   transition smooths compass jitter without feeling laggy. */
+body.ar-active .catch-treasure:not(.catch-treasure--caught) {
+  animation: none;
+  transition: left .06s linear, top .06s linear,
+              width .12s ease, height .12s ease, opacity .18s ease;
+}
+
+/* "Turn this way" arrow shown when the treasure is outside the camera frame. */
+#arHint {
+  position: absolute;
+  z-index: 12;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-fun);
+  font-weight: 700;
+  font-size: clamp(1rem, 4vw, 1.4rem);
+  color: var(--ink);
+  background: linear-gradient(135deg, var(--gold) 0%, var(--sunset-a) 100%);
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-glow-gold), var(--shadow-md);
+  border: 1.5px solid rgba(255, 255, 255, .35);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: ar-hint-pulse 1.4s ease-in-out infinite;
+}
+#arHint.hidden { display: none; }
+/* data-side anchors it to the edge nearest the treasure (transform stays free of
+   the pulse animation so vertical/horizontal centering isn't clobbered). */
+#arHint[data-side="right"]  { left: auto; right: calc(var(--safe-right) + 14px); top: 50%; transform: translateY(-50%); }
+#arHint[data-side="left"]   { right: auto; left: calc(var(--safe-left) + 14px);  top: 50%; transform: translateY(-50%); }
+#arHint[data-side="top"]    { top: calc(var(--safe-top) + 78px); bottom: auto; transform: translateX(-50%); }
+#arHint[data-side="bottom"] { top: auto; bottom: 170px; transform: translateX(-50%); }
+
+@keyframes ar-hint-pulse {
+  0%, 100% { box-shadow: var(--shadow-glow-gold), var(--shadow-md); }
+  50%      { box-shadow: 0 0 30px 10px rgba(255, 201, 64, .9), var(--shadow-lg); }
+}

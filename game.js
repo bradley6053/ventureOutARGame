@@ -25,7 +25,6 @@ const CONFIG = {
   },
 
   catchRadiusM: 25,       // how close (meters) before a treasure can be tapped
-  spawnEveryMeters: 30,   // GPS backup: drop a treasure near you every N meters driven
   practiceSpanM: 250,     // Practice Mode: real-world meters that map to the full resort map
   ambientTreasures: 4,    // how many treasures float on the map per zone
   safetyReminderMs: 150000, // gentle "stay seated" reminder cadence (2.5 min)
@@ -203,8 +202,6 @@ function fractionMeters(f1, f2) {
    ========================================================================== */
 let mode = 'unknown';        // 'gps' | 'explorer'
 let playerFrac = { fx: 0.5, fy: 0.5 };
-let lastFrac = null;
-let distSinceSpawn = 0;
 
 function startLocation() {
   if (!('geolocation' in navigator)) { enterExplorer(); return; }
@@ -242,14 +239,8 @@ function onPosition(pos) {
   }
   playerFrac = gpsToFraction(latitude, longitude);
   positionPlayerDot();
-  // distance-based backup spawner so there's always something to catch
-  if (lastFrac) distSinceSpawn += fractionMeters(playerFrac, lastFrac);
-  lastFrac = playerFrac;
-  if (distSinceSpawn >= CONFIG.spawnEveryMeters) {
-    distSinceSpawn = 0;
-    spawnTreasure({ at: playerFrac, collectable: true });
-  }
   updateProximity();
+  requestRender(); // keep the AR treasure's size/heading fresh as you walk
   if (calibrating) updateCalibrateLiveFix(latitude, longitude);
 }
 function positionPlayerDot() {
@@ -301,10 +292,10 @@ function spawnTreasure(opts = {}) {
   return t;
 }
 
-// Keep a handful of ambient treasures floating in the current zone's band.
+// Keep a handful of ambient treasures floating in the current zone's band, so
+// there's always something parked on the map to travel toward.
 function refreshAmbient(forceCollectable) {
-  const ambient = treasures.filter((t) => !t.isPiece);
-  while (ambient.length + countAmbient() < CONFIG.ambientTreasures) {
+  while (countAmbient() < CONFIG.ambientTreasures) {
     spawnTreasure({ collectable: forceCollectable });
   }
 }
@@ -338,21 +329,32 @@ function openCatch(t) {
   pendingCatch = t;
   hide($('proximityPrompt'));
   hide($('marleyBubble')); // don't let Marley cover the treasure to tap
+  hideArHint();
   showScreen('screen-catch');
   initCamera();
   const layer = $('catchLayer');
+  arEl = null;
   if (layer) {
     layer.innerHTML = '';
     const c = document.createElement('button');
     c.className = 'catch-treasure';
     c.type = 'button';
     c.textContent = t.emoji;
-    c.style.left = '50%';   // center horizontally (CSS centers via translate -50%)
-    c.style.top = '44%';    // sit above the hint + back button
     on(c, 'click', () => doCatch(c));
     layer.appendChild(c);
+    arEl = c;
+    if (hasOrientation) {
+      document.body.classList.add('ar-active'); // sensors drive position + size
+      updateArFrame();                          // place it from the current heading now (no first-frame flash)
+    } else {
+      document.body.classList.remove('ar-active');
+      c.style.left = '50%';   // fallback: centered overlay (original behavior)
+      c.style.top = '44%';
+    }
   }
-  setText('catchHint', t.isPiece ? 'A treasure piece! Tap it! 🗺️' : 'Tap the treasure to catch it! 👆');
+  const findMsg = hasOrientation ? 'Look around to find it, then tap! 👀'
+                                 : 'Tap the treasure to catch it! 👆';
+  setText('catchHint', t.isPiece ? 'A treasure piece — look around! 🗺️' : findMsg);
 }
 
 function doCatch(c) {
@@ -376,6 +378,7 @@ function doCatch(c) {
   if (idx >= 0) { t.el.remove(); treasures.splice(idx, 1); }
 
   setTimeout(() => {
+    endAr();
     showScreen('screen-map');
     afterCatch(t);
   }, 950);
@@ -385,15 +388,20 @@ function afterCatch(t) {
   const z = zone();
   if (t.isPiece) { zoneComplete(); return; }
 
-  // When the kid is one catch away, reveal the special map piece near them.
+  // When the kid is one catch away, reveal the special map piece at a fixed spot
+  // in the zone band so they still have to travel to it (no spawning underfoot).
   if (!state.pieceSpawned && state.zoneProgress >= z.target - 1) {
     state.pieceSpawned = true;
-    const at = mode === 'gps' ? playerFrac
-      : { fx: 0.5, fy: (z.band[0] + z.band[1]) / 2 };
-    const piece = spawnTreasure({ piece: true, at, collectable: true });
-    if (piece) piece.el.classList.add('treasure--collectable');
-    marley(z.isFinale ? "There it is — the GRAND CHEST! Tap it! 🧰"
-                      : "A map piece appeared! Grab it! 🗺️", 5000);
+    const at = { fx: 0.5, fy: (z.band[0] + z.band[1]) / 2 };
+    const piece = spawnTreasure({ piece: true, at, collectable: mode === 'explorer' });
+    if (piece && mode === 'explorer') piece.el.classList.add('treasure--collectable');
+    updateProximity(); // GPS: only lights up if the kid is already close enough
+    const msg = mode === 'gps'
+      ? (z.isFinale ? "The GRAND CHEST appeared on the map — drive to the X! 🧰"
+                    : "A map piece appeared on the map — go find it! 🗺️")
+      : (z.isFinale ? "There it is — the GRAND CHEST! Tap it! 🧰"
+                    : "A map piece appeared! Grab it! 🗺️");
+    marley(msg, 5000);
   } else if (mode === 'explorer') {
     refreshAmbient(true);
   } else {
@@ -588,6 +596,159 @@ async function initCamera() {
 }
 
 /* ============================================================================
+   11b. Device orientation — compass heading + pitch.
+   Powers the boat's "facing beam" on the map and the world-anchored AR
+   treasure on the catch screen. Degrades gracefully: with no sensor/permission
+   the beam stays hidden and the catch screen falls back to a centered emoji.
+   ========================================================================== */
+let hasOrientation = false;
+let oriHeading = 0;   // compass degrees the phone points: 0=N, 90=E, clockwise
+let oriPitch = 0;     // camera up/down angle in degrees: 0 ≈ horizon, + = aimed up
+let renderQueued = false;
+
+// AR tuning — expect to nudge these once on a real iPhone (see PROGRESS.md).
+const AR = {
+  fovH: 60,        // horizontal field of view (deg) mapped across the screen width
+  fovV: 75,        // vertical field of view (deg)
+  elevation: -5,   // treasure sits just below the horizon (deg)
+  sizeNear: 172,   // px when you're right on top of it (D≈0)
+  sizeFar: 78,     // px at the edge of catch range (D≈catchRadiusM)
+};
+
+// Ask for motion/orientation access. iOS 13+ needs this from a user gesture
+// (we call it from the Start button); other platforms just start listening.
+async function requestMotionPermission() {
+  const DOE = window.DeviceOrientationEvent;
+  try {
+    if (DOE && typeof DOE.requestPermission === 'function') {
+      const res = await DOE.requestPermission();
+      if (res === 'granted') startOrientation();
+    } else {
+      startOrientation();
+    }
+  } catch (e) { /* denied / not a gesture — fall back silently */ }
+}
+
+function startOrientation() {
+  window.addEventListener('deviceorientationabsolute', onOrientation, true);
+  window.addEventListener('deviceorientation', onOrientation, true);
+}
+
+function onOrientation(e) {
+  if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) {
+    oriHeading = e.webkitCompassHeading;                 // iOS: already 0=N, clockwise
+  } else if (typeof e.alpha === 'number' && e.alpha !== null) {
+    const so = (screen.orientation && screen.orientation.angle) || 0;
+    oriHeading = (360 - e.alpha + so) % 360;             // Android / generic
+  } else {
+    return;                                              // no usable heading
+  }
+  if (typeof e.beta === 'number') oriPitch = e.beta - 90; // upright ≈ 90 → 0 at horizon
+  if (!hasOrientation) {
+    hasOrientation = true;
+    document.body.classList.add('has-orientation');
+  }
+  requestRender();
+}
+
+// Coalesce sensor + GPS updates into one paint per frame.
+function requestRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(renderOrientation);
+}
+function renderOrientation() {
+  renderQueued = false;
+  const beam = $('facingBeam');
+  if (beam && hasOrientation) {
+    // Point the beam, on the map, in the real direction the phone faces.
+    beam.style.setProperty('--face', (mapNorthDeg() + oriHeading) + 'deg');
+  }
+  updateArFrame();
+}
+
+// Compass bearing (deg, 0=N) of the map image's "up" edge.
+function mapNorthDeg() {
+  const c = state.calibration;
+  if (!c) return 0; // Practice / pre-seed map is drawn north-up
+  // A true-north step (Δeast=0, Δnorth=1) lands at screen vector (-b, a).
+  return (Math.atan2(-c.b, -c.a) * 180 / Math.PI + 360) % 360;
+}
+
+// Real-world compass bearing (deg, 0=N) from one map fraction to another.
+function worldBearing(from, to) {
+  const dfx = to.fx - from.fx, dfy = to.fy - from.fy;
+  const c = state.calibration;
+  let east, north;
+  if (c) {
+    // Invert the similarity transform (a+bi): meters = (Δfx+iΔfy)/(a+bi).
+    const denom = c.a * c.a + c.b * c.b || 1;
+    east  = (dfx * c.a + dfy * c.b) / denom;
+    north = (dfy * c.a - dfx * c.b) / denom;
+  } else {
+    // North-up map: +fx = east, −fy = north (per-axis scale, map is anisotropic).
+    east  =  dfx * CONFIG.resort.approxWidthM;
+    north = -dfy * CONFIG.resort.approxHeightM;
+  }
+  return (Math.atan2(east, north) * 180 / Math.PI + 360) % 360;
+}
+
+// Place / size the AR treasure each frame from the sensors. No-op unless the
+// catch screen is open with orientation available.
+let arEl = null;
+function updateArFrame() {
+  const c = arEl, t = pendingCatch;
+  if (!c || !t || !hasOrientation) return;
+  // If sensors came online after the catch screen opened, switch out of the
+  // centered fallback into world-anchored AR.
+  if (!document.body.classList.contains('ar-active')) document.body.classList.add('ar-active');
+  const bearing = worldBearing(playerFrac, { fx: t.fx, fy: t.fy });
+  const daz = ((bearing - oriHeading + 540) % 360) - 180; // [-180,180]
+  const del = AR.elevation - oriPitch;
+  const halfH = AR.fovH / 2, halfV = AR.fovV / 2;
+  if (Math.abs(daz) > halfH || Math.abs(del) > halfV) {
+    c.style.opacity = '0';
+    c.style.pointerEvents = 'none';
+    showArHint(daz, del);
+    return;
+  }
+  hideArHint();
+  c.style.opacity = '1';
+  c.style.pointerEvents = 'auto';
+  const xPct = 50 + (daz / halfH) * 50;
+  const yPct = 50 - (del / halfV) * 50;
+  const D = fractionMeters(playerFrac, { fx: t.fx, fy: t.fy });
+  const k = Math.max(0, Math.min(1, D / CONFIG.catchRadiusM)); // 0 near .. 1 far
+  const size = Math.round(AR.sizeNear + (AR.sizeFar - AR.sizeNear) * k);
+  c.style.left = xPct + '%';
+  c.style.top = yPct + '%';
+  c.style.width = size + 'px';
+  c.style.height = size + 'px';
+  c.style.fontSize = Math.round(size * 0.6) + 'px';
+}
+
+// Edge arrow that points toward an off-screen treasure ("turn this way").
+function showArHint(daz, del) {
+  const h = $('arHint');
+  if (!h) return;
+  const hMag = Math.abs(daz) / (AR.fovH / 2);
+  const vMag = Math.abs(del) / (AR.fovV / 2);
+  let arrow, side;
+  if (hMag >= vMag) { arrow = daz > 0 ? '→' : '←'; side = daz > 0 ? 'right' : 'left'; }
+  else              { arrow = del > 0 ? '↑' : '↓'; side = del > 0 ? 'top'   : 'bottom'; }
+  h.textContent = arrow + ' Turn to find it!';
+  h.dataset.side = side;
+  show(h);
+}
+function hideArHint() { hide($('arHint')); }
+
+function endAr() {
+  arEl = null;
+  document.body.classList.remove('ar-active');
+  hideArHint();
+}
+
+/* ============================================================================
    12. Sound — synthesized with Web Audio (no audio files needed)
    ========================================================================== */
 let actx = null;
@@ -694,7 +855,8 @@ function offlineGate(ready) {
    ========================================================================== */
 function startGame() {
   unlockAudio();
-  initCamera();           // ask for camera early (we have a user gesture)
+  initCamera();              // ask for camera early (we have a user gesture)
+  requestMotionPermission(); // ask for compass/motion in the same gesture (iOS 13+)
   if (navigator.storage && navigator.storage.persist) {
     navigator.storage.persist().catch(() => {});
   }
@@ -724,7 +886,7 @@ function bindUI() {
   on($('btnBagBack'), 'click', () => { playTap(); showScreen('screen-map'); });
   on($('btnCalibrate'), 'click', () => { playTap(); startCalibrate(); });
   on($('btnWeMadeIt'), 'click', () => { playTap(); advanceZone(); });
-  on($('btnCatchBack'), 'click', () => { playTap(); pendingCatch = null; showScreen('screen-map'); });
+  on($('btnCatchBack'), 'click', () => { playTap(); pendingCatch = null; endAr(); showScreen('screen-map'); });
   on($('btnSafetyOk'), 'click', () => { playTap(); hide($('safetyCard')); });
   on($('btnPlayAgain'), 'click', () => { playTap(); playAgain(); });
 
@@ -772,6 +934,14 @@ window.MTH = {
   zone: (i) => { state.zoneIndex = Math.max(0, Math.min(CONFIG.zones.length - 1, i)); startZone(true); },
   win: () => win(),
   practice: () => { state.practice = true; state.practiceOrigin = null; save(); updatePracticeBtn(); return 'practice on'; },
+  // Simulate a compass heading/pitch on a desktop (no real sensors) to test the
+  // facing beam + world-anchored AR. e.g. MTH.ori(90) faces east; MTH.ori(0,-20) tilts down.
+  ori: (heading = 0, pitch = 0) => {
+    hasOrientation = true; document.body.classList.add('has-orientation');
+    oriHeading = ((heading % 360) + 360) % 360; oriPitch = pitch;
+    requestRender();
+    return `heading ${oriHeading}°, pitch ${oriPitch}°`;
+  },
   reset: () => { localStorage.removeItem(SAVE_KEY); location.reload(); },
 };
 })();

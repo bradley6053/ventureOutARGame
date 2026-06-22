@@ -96,7 +96,7 @@
     <div id="mapViewport">
       <img id="mapImg" src="./assets/map/resort-map.jpg" alt="Resort map">
       <div id="treasureLayer"></div>
-      <div id="playerDot"><span>⛵</span></div>
+      <div id="playerDot"><div id="facingBeam" aria-hidden="true"></div><span>⛵</span></div>
     </div>
 
     <!-- Proximity prompt (floats over map) -->
@@ -127,6 +127,9 @@
 
     <!-- JS-injected catch treasure lives here -->
     <div id="catchLayer"></div>
+
+    <!-- Off-screen "turn this way" arrow (shown when the treasure is out of frame) -->
+    <div id="arHint" class="hidden"></div>
 
     <!-- Hint text -->
     <div id="catchHint">Tap the treasure to catch it! 👆</div>
