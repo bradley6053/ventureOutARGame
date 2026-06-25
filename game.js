@@ -720,6 +720,16 @@ function startCalibrate() {
   clearTimeout(calAvgTimer);
   hide($('calExportWrap'));
   show($('calControls'));
+  // Reopen in a known place: clear any dragged position / minimized state.
+  const panel = $('calPanel');
+  if (panel) {
+    panel.classList.remove('is-min');
+    panel.style.left = '';
+    panel.style.top = '';
+    panel.style.transform = '';
+  }
+  const minBtn = $('btnCalMin');
+  if (minBtn) { minBtn.textContent = '▾'; minBtn.setAttribute('aria-label', 'Minimize panel'); minBtn.title = 'Minimize'; }
   show($('calPanel'));
   renderCalPanel();
   marley("Let's set up the map! Stand at a landmark and press Capture. 📍", 6000);
@@ -844,6 +854,68 @@ function calCopy() {
 }
 
 function calDone() { hide($('calPanel')); calStage = 'idle'; }
+
+// Collapse the panel down to its title bar so it stops covering the map, or
+// expand it back. The map is tappable in either state.
+function calToggleMin() {
+  const panel = $('calPanel');
+  if (!panel) return;
+  const min = panel.classList.toggle('is-min');
+  const btn = $('btnCalMin');
+  if (btn) {
+    btn.textContent = min ? '▴' : '▾';
+    btn.setAttribute('aria-label', min ? 'Expand panel' : 'Minimize panel');
+    btn.title = min ? 'Expand' : 'Minimize';
+  }
+}
+
+// Drag the set-up panel by its title bar so it can be moved off the spot you
+// need to tap. Works with mouse and touch via Pointer Events.
+function setupCalDrag() {
+  const panel = $('calPanel');
+  const bar = $('calBar');
+  if (!panel || !bar) return;
+  let dragging = false, startX = 0, startY = 0, baseLeft = 0, baseTop = 0;
+
+  const onMove = (e) => {
+    if (!dragging) return;
+    e.preventDefault();
+    let left = baseLeft + (e.clientX - startX);
+    let top = baseTop + (e.clientY - startY);
+    // Keep most of the panel on-screen.
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    const maxLeft = window.innerWidth - 40, maxTop = window.innerHeight - 40;
+    left = Math.max(40 - w, Math.min(left, maxLeft));
+    top = Math.max(0, Math.min(top, maxTop));
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+  };
+
+  const onUp = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    panel.classList.remove('is-dragging');
+    try { bar.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+
+  bar.addEventListener('pointerdown', (e) => {
+    // Don't start a drag from the minimize button.
+    if (e.target.closest('.cal-panel__min')) return;
+    const r = panel.getBoundingClientRect();
+    baseLeft = r.left; baseTop = r.top;
+    startX = e.clientX; startY = e.clientY;
+    // Switch from the centering transform to absolute px so dragging is stable.
+    panel.style.transform = 'none';
+    panel.style.left = baseLeft + 'px';
+    panel.style.top = baseTop + 'px';
+    dragging = true;
+    panel.classList.add('is-dragging');
+    try { bar.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  bar.addEventListener('pointermove', onMove);
+  bar.addEventListener('pointerup', onUp);
+  bar.addEventListener('pointercancel', onUp);
+}
 
 function updateCalGauge() {
   const g = $('calGps');
@@ -1214,6 +1286,8 @@ function bindUI() {
   on($('btnCalSolve'), 'click', () => { playTap(); calSolve(); });
   on($('btnCalCopy'), 'click', () => { playTap(); calCopy(); });
   on($('btnCalDone'), 'click', () => { playTap(); calDone(); });
+  on($('btnCalMin'), 'click', () => { playTap(); calToggleMin(); });
+  setupCalDrag();
   on($('btnWeMadeIt'), 'click', () => { playTap(); advanceZone(); });
   on($('btnCatchBack'), 'click', () => { playTap(); pendingCatch = null; endAr(); showScreen('screen-map'); });
   on($('btnSafetyOk'), 'click', () => { playTap(); hide($('safetyCard')); });

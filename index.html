@@ -107,7 +107,12 @@
     <!-- "Set Up the Map" panel (floats over map; card is click-through so the
          map stays tappable — only its buttons capture taps). -->
     <div id="calPanel" class="cal-panel hidden">
-      <div class="cal-panel__title">📍 Set Up the Map</div>
+      <div id="calBar" class="cal-panel__bar">
+        <span class="cal-panel__grip" aria-hidden="true">⠿</span>
+        <span class="cal-panel__title">📍 Set Up the Map</span>
+        <button id="btnCalMin" type="button" class="cal-panel__min" aria-label="Minimize panel" title="Minimize">▾</button>
+      </div>
+      <div id="calBody" class="cal-panel__body">
       <div id="calGps" class="cal-panel__gps" data-q="wait">GPS: locating…</div>
       <div id="calPrompt" class="cal-panel__prompt"></div>
       <ul id="calList" class="cal-panel__list"></ul>
@@ -130,6 +135,7 @@
           <button id="btnCalDone" type="button" class="btn btn--primary">Done</button>
         </div>
       </div>
+      </div><!-- /calBody -->
     </div>
 
     <!-- Bottom control bar -->

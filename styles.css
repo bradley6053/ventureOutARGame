@@ -527,7 +527,39 @@ button {
 }
 .cal-panel button,
 .cal-panel textarea { pointer-events: auto; }
-.cal-panel__title  { font-weight: 700; font-size: 1rem; margin-bottom: 6px; }
+
+/* Title bar doubles as the drag handle, so it must capture taps. */
+.cal-panel__bar {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  cursor: grab;
+  touch-action: none;          /* let JS own the drag gesture */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.cal-panel__bar:active { cursor: grabbing; }
+.cal-panel.is-dragging { box-shadow: 0 12px 32px rgba(0,0,0,.5); }
+.cal-panel__grip   { font-size: 1rem; opacity: .6; line-height: 1; }
+.cal-panel__min {
+  margin-left: auto;
+  flex: 0 0 auto;
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.25);
+  background: rgba(0,0,0,.25);
+  color: var(--white);
+  font-size: 1rem; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+/* Minimized: collapse to just the bar so the map underneath is fully tappable. */
+.cal-panel.is-min { padding-bottom: 14px; }
+.cal-panel.is-min .cal-panel__body { display: none; }
+.cal-panel.is-min .cal-panel__bar { margin-bottom: 0; }
+
+.cal-panel__title  { font-weight: 700; font-size: 1rem; margin-bottom: 0; }
 .cal-panel__gps    { font-weight: 700; font-size: .9rem; margin-bottom: 6px; }
 .cal-panel__gps[data-q="good"] { color: #7CFFB2; }
 .cal-panel__gps[data-q="ok"]   { color: #FFD15C; }
