@@ -22,6 +22,10 @@ const CONFIG = {
     center: { lat: 30.1373, lng: -85.747 }, // ~4345 Thomas Dr, Panama City Beach
     approxWidthM: 520,   // rough E-W size of the resort, in meters
     approxHeightM: 950,  // rough N-S size (Lagoon at north -> Gulf at south)
+    // Baked-in georeference: paste the {kind:'affine', A,B,Tx,C,D,Ty,lat0,lng0}
+    // block exported by the on-site "Set Up the Map" tool here, and the game is
+    // accurate for everyone on first open — no calibration needed. null = none yet.
+    georef: null,
   },
 
   catchRadiusM: 25,       // how close (meters) before a treasure can be tapped
@@ -45,6 +49,14 @@ const CONFIG = {
         { emoji: '🐚', value: 5 },  { emoji: '⭐', value: 15 },
       ],
       piece: { emoji: '🗺️', value: 50, label: 'Map Piece 1' },
+      // Hand-placed accessible spots (placement.html). piece:true = the map piece.
+      spots: [
+        { fx: 0.8232, fy: 0.1323, emoji: '🐠', piece: false },
+        { fx: 0.8607, fy: 0.1744, emoji: '🐟', piece: false },
+        { fx: 0.6150, fy: 0.1059, emoji: '🐚', piece: false },
+        { fx: 0.6816, fy: 0.1205, emoji: '⭐', piece: false },
+        { fx: 0.4545, fy: 0.0811, emoji: '🗺️', piece: true },
+      ],
     },
     {
       name: 'The Marine Streets',
@@ -57,6 +69,13 @@ const CONFIG = {
         { emoji: '🦀', value: 15 }, { emoji: '💎', value: 25 },
       ],
       piece: { emoji: '🗺️', value: 50, label: 'Map Piece 2' },
+      spots: [
+        { fx: 0.2029, fy: 0.4133, emoji: '🪙', piece: false },
+        { fx: 0.3477, fy: 0.2788, emoji: '🐚', piece: false },
+        { fx: 0.0591, fy: 0.3053, emoji: '🦀', piece: false },
+        { fx: 0.0634, fy: 0.1376, emoji: '💎', piece: false },
+        { fx: 0.1544, fy: 0.2258, emoji: '🗺️', piece: true },
+      ],
     },
     {
       name: 'The Amenities Hub',
@@ -69,6 +88,13 @@ const CONFIG = {
         { emoji: '🥥', value: 10 },    { emoji: '🦜', value: 20 },
       ],
       piece: { emoji: '🗺️', value: 50, label: 'Map Piece 3' },
+      spots: [
+        { fx: 0.3475, fy: 0.6883, emoji: '🏴‍☠️', piece: false },
+        { fx: 0.5540, fy: 0.7265, emoji: '🪙', piece: false },
+        { fx: 0.4578, fy: 0.8120, emoji: '🥥', piece: false },
+        { fx: 0.4125, fy: 0.7551, emoji: '🦜', piece: false },
+        { fx: 0.5024, fy: 0.6902, emoji: '🗺️', piece: true },
+      ],
     },
     {
       name: 'The Big Crossing',
@@ -82,6 +108,11 @@ const CONFIG = {
         { emoji: '🧭', value: 20 }, { emoji: '🪙', value: 10 },
       ],
       piece: { emoji: '🗺️', value: 50, label: 'Map Piece 4' },
+      spots: [
+        { fx: 0.8253, fy: 0.6228, emoji: '🧭', piece: false },
+        { fx: 0.9254, fy: 0.4354, emoji: '🪙', piece: false },
+        { fx: 0.8238, fy: 0.3556, emoji: '🗺️', piece: true },
+      ],
     },
     {
       name: 'The Beach & Pool',
@@ -95,6 +126,13 @@ const CONFIG = {
         { emoji: '🪙', value: 10 }, { emoji: '🐚', value: 5 },
       ],
       piece: { emoji: '🧰', value: 200, label: 'Grand Treasure Chest' },
+      spots: [
+        { fx: 0.2126, fy: 0.9467, emoji: '🐬', piece: false },
+        { fx: 0.3751, fy: 0.9260, emoji: '🪙', piece: false },
+        { fx: 0.4554, fy: 0.9714, emoji: '🐢', piece: false },
+        { fx: 0.3088, fy: 0.9724, emoji: '🐚', piece: false },
+        { fx: 0.3474, fy: 0.8774, emoji: '🧰', piece: true },
+      ],
     },
   ],
 };
@@ -128,7 +166,8 @@ function freshState() {
     pieceSpawned: false,  // has this zone's map piece appeared yet?
     pieces: 0,            // map pieces / chest collected (0..5)
     collected: {},        // emoji -> count, for the Treasure Bag
-    calibration: null,    // {a,b,tx,ty,lat0,lng0} once calibrated on-site
+    calibration: null,    // {kind:'affine',A,B,Tx,C,D,Ty,lat0,lng0} once set up on-site
+                          // (legacy {a,b,tx,ty,lat0,lng0} similarity saves still work)
     practice: false,      // Practice Mode: treat your current location as the resort
     practiceOrigin: null, // {lat,lng} captured on the first fix in Practice Mode
     done: false,
@@ -163,10 +202,11 @@ function gpsToFraction(lat, lng) {
     const span = CONFIG.practiceSpanM;
     return clampFrac(0.5 + p.x / span, 0.5 - p.y / span);
   }
-  const c = state.calibration;
-  if (c) {
-    const { x, y } = projectMeters(lat, lng, c.lat0, c.lng0);
-    return clampFrac(c.a * x - c.b * y + c.tx, c.b * x + c.a * y + c.ty);
+  const aff = activeAffine();
+  if (aff) {
+    const { x, y } = projectMeters(lat, lng, aff.lat0, aff.lng0);
+    return clampFrac(aff.A * x + aff.B * y + aff.Tx,
+                     aff.C * x + aff.D * y + aff.Ty);
   }
   const ctr = CONFIG.resort.center;
   const { x, y } = projectMeters(lat, lng, ctr.lat, ctr.lng);
@@ -190,11 +230,94 @@ function solveCalibration(p1, p2) {
   const ty = p1.fy - (b * m1.x + a * m1.y);
   return { a, b, tx, ty, lat0: ctr.lat, lng0: ctr.lng };
 }
-// Distance between two map fractions, expressed in approx meters.
+
+// --- Affine georeference (meters east/north -> map fraction) -----------------
+// We map GPS to the map with an affine transform:  fx = A*x + B*y + Tx ,
+// fy = C*x + D*y + Ty  (x=east m, y=north m). This generalizes the old 2-point
+// similarity (which is the special case A=D=a, B=-b, C=b) and, with 3+ points,
+// also corrects the map image's tilt and N-S/E-W stretch.
+
+// Normalize any stored calibration (new affine OR legacy similarity) to one
+// affine shape {A,B,Tx,C,D,Ty,lat0,lng0}, or null.
+function affineOf(c) {
+  if (!c) return null;
+  if (c.kind === 'affine') return c;
+  if (typeof c.a === 'number') {            // legacy {a,b,tx,ty}: fx=a*x-b*y+tx; fy=b*x+a*y+ty
+    return { A: c.a, B: -c.b, Tx: c.tx, C: c.b, D: c.a, Ty: c.ty, lat0: c.lat0, lng0: c.lng0 };
+  }
+  return null;
+}
+// The calibration in force: this device's saved one, else the baked-in default.
+// Practice Mode draws a north-up map, so it ignores any affine.
+function activeAffine() {
+  if (state.practice && state.practiceOrigin) return null;
+  return affineOf(state.calibration) || affineOf(CONFIG.resort.georef);
+}
+function mean(arr) { return arr.reduce((s, v) => s + v, 0) / arr.length; }
+
+// Solve a 3x3 linear system M·v = r by Cramer's rule. Returns [v0,v1,v2] or null.
+function solve3(M, r) {
+  const d = (m) =>
+      m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+    - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+    + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  const det = d(M);
+  if (Math.abs(det) < 1e-9) return null;    // singular / collinear points
+  const withCol = (c) => M.map((row, i) => row.map((val, j) => (j === c ? r[i] : val)));
+  return [d(withCol(0)) / det, d(withCol(1)) / det, d(withCol(2)) / det];
+}
+
+// Least-squares affine from on-site points [{lat,lng,fx,fy}]. 2 points -> the old
+// similarity (exact). 3+ -> full affine. Returns {ok:true, kind:'affine', ...} with
+// rmsPx (fit residual in image pixels), or {ok:false, reason} (surfaced, never silent).
+function solveAffine(points) {
+  if (!points || points.length < 2) return { ok: false, reason: 'Need at least 2 spots.' };
+  if (points.length === 2) {
+    const aff = affineOf(solveCalibration(points[0], points[1]));
+    return { ok: true, kind: 'affine', A: aff.A, B: aff.B, Tx: aff.Tx, C: aff.C, D: aff.D,
+             Ty: aff.Ty, lat0: aff.lat0, lng0: aff.lng0, rmsPx: 0, similarity: true };
+  }
+  const lat0 = mean(points.map((p) => p.lat));
+  const lng0 = mean(points.map((p) => p.lng));
+  const P = points.map((p) => {
+    const m = projectMeters(p.lat, p.lng, lat0, lng0);
+    return { x: m.x, y: m.y, fx: p.fx, fy: p.fy };
+  });
+  let Sxx = 0, Sxy = 0, Sx = 0, Syy = 0, Sy = 0;
+  let Sxfx = 0, Syfx = 0, Sfx = 0, Sxfy = 0, Syfy = 0, Sfy = 0;
+  const N = P.length;
+  for (const p of P) {
+    Sxx += p.x * p.x; Sxy += p.x * p.y; Sx += p.x; Syy += p.y * p.y; Sy += p.y;
+    Sxfx += p.x * p.fx; Syfx += p.y * p.fx; Sfx += p.fx;
+    Sxfy += p.x * p.fy; Syfy += p.y * p.fy; Sfy += p.fy;
+  }
+  const M = [[Sxx, Sxy, Sx], [Sxy, Syy, Sy], [Sx, Sy, N]];
+  const X = solve3(M, [Sxfx, Syfx, Sfx]);   // -> [A, B, Tx]
+  const Y = solve3(M, [Sxfy, Syfy, Sfy]);   // -> [C, D, Ty]
+  if (!X || !Y) return { ok: false, reason: 'Spots are in a line — pick 3 spread-out ones.' };
+  const [A, B, Tx] = X, [C, D, Ty] = Y;
+  let se = 0;
+  for (const p of P) {
+    const ex = (A * p.x + B * p.y + Tx - p.fx) * 378;   // map is 378x756 px
+    const ey = (C * p.x + D * p.y + Ty - p.fy) * 756;
+    se += ex * ex + ey * ey;
+  }
+  return { ok: true, kind: 'affine', A, B, Tx, C, D, Ty, lat0, lng0, rmsPx: Math.sqrt(se / N) };
+}
+
+// Distance between two map fractions, in meters. When calibrated, invert the
+// affine's 2x2 so distance uses the SAME metric as the GPS->map mapping; else
+// fall back to the anisotropic resort dimensions (north-up pre-seed / practice).
 function fractionMeters(f1, f2) {
-  const dx = (f1.fx - f2.fx) * CONFIG.resort.approxWidthM;
-  const dy = (f1.fy - f2.fy) * CONFIG.resort.approxHeightM;
-  return Math.hypot(dx, dy);
+  const dfx = f1.fx - f2.fx, dfy = f1.fy - f2.fy;
+  const aff = activeAffine();
+  if (aff) {
+    const det = aff.A * aff.D - aff.B * aff.C || 1;
+    const east  = ( aff.D * dfx - aff.B * dfy) / det;
+    const north = (-aff.C * dfx + aff.A * dfy) / det;
+    return Math.hypot(east, north);
+  }
+  return Math.hypot(dfx * CONFIG.resort.approxWidthM, dfy * CONFIG.resort.approxHeightM);
 }
 
 /* ============================================================================
@@ -241,7 +364,7 @@ function onPosition(pos) {
   positionPlayerDot();
   updateProximity();
   requestRender(); // keep the AR treasure's size/heading fresh as you walk
-  if (calibrating) updateCalibrateLiveFix(latitude, longitude);
+  if (calibrating) onCalibrateFix(latitude, longitude, pos.coords.accuracy);
 }
 function positionPlayerDot() {
   const dot = $('playerDot');
@@ -266,11 +389,23 @@ function randomBandSpot() {
   return { fx, fy };
 }
 
+// Hand-placed accessible spots for the current zone (from CONFIG ... see
+// placement.html). Ambient = the non-piece spots; the piece has its own spot.
+function ambientSpots(z) { return (z.spots || []).filter((s) => !s.piece); }
+function piecePlacement(z) {
+  const p = (z.spots || []).find((s) => s.piece);
+  return p ? { fx: p.fx, fy: p.fy } : { fx: 0.5, fy: (z.band[0] + z.band[1]) / 2 };
+}
+function valueForEmoji(z, emoji) {
+  const d = z.treasures.find((t) => t.emoji === emoji);
+  return d ? d.value : 10;
+}
+
 function spawnTreasure(opts = {}) {
   const z = zone();
   const isPiece = !!opts.piece;
-  const def = isPiece ? z.piece
-    : z.treasures[Math.floor(Math.random() * z.treasures.length)];
+  const def = opts.def || (isPiece ? z.piece
+    : z.treasures[Math.floor(Math.random() * z.treasures.length)]);
   const spot = opts.at || randomBandSpot();
   const layer = $('treasureLayer');
   if (!layer) return;
@@ -284,7 +419,7 @@ function spawnTreasure(opts = {}) {
   el.style.top  = (spot.fy * 100) + '%';
 
   const t = { el, fx: spot.fx, fy: spot.fy, emoji: def.emoji,
-              value: def.value, isPiece,
+              value: def.value, isPiece, spotIndex: opts.spotIndex ?? null,
               collectable: mode === 'explorer' || !!opts.collectable };
   if (t.collectable) el.classList.add('treasure--collectable');
   layer.appendChild(el);
@@ -292,11 +427,31 @@ function spawnTreasure(opts = {}) {
   return t;
 }
 
-// Keep a handful of ambient treasures floating in the current zone's band, so
-// there's always something parked on the map to travel toward.
+// Keep ambient treasures parked on the map. When the zone has hand-placed spots
+// (the normal case) we only ever spawn at those accessible coordinates, refilling
+// a freed spot after a catch; otherwise we fall back to the random band spawner.
 function refreshAmbient(forceCollectable) {
-  while (countAmbient() < CONFIG.ambientTreasures) {
-    spawnTreasure({ collectable: forceCollectable });
+  const z = zone();
+  const pool = ambientSpots(z);
+  if (!pool.length) {
+    while (countAmbient() < CONFIG.ambientTreasures) {
+      spawnTreasure({ collectable: forceCollectable });
+    }
+    return;
+  }
+  const desired = Math.min(CONFIG.ambientTreasures, pool.length);
+  while (countAmbient() < desired) {
+    const used = new Set(
+      treasures.filter((t) => !t.isPiece && t.spotIndex != null).map((t) => t.spotIndex));
+    let idx = pool.findIndex((_, i) => !used.has(i));
+    if (idx < 0) idx = 0; // safety: all occupied (shouldn't happen since desired<=pool)
+    const sp = pool[idx];
+    spawnTreasure({
+      at: { fx: sp.fx, fy: sp.fy },
+      def: { emoji: sp.emoji, value: valueForEmoji(z, sp.emoji) },
+      spotIndex: idx,
+      collectable: forceCollectable,
+    });
   }
 }
 function countAmbient() { return treasures.filter((t) => !t.isPiece).length; }
@@ -392,7 +547,7 @@ function afterCatch(t) {
   // in the zone band so they still have to travel to it (no spawning underfoot).
   if (!state.pieceSpawned && state.zoneProgress >= z.target - 1) {
     state.pieceSpawned = true;
-    const at = { fx: 0.5, fy: (z.band[0] + z.band[1]) / 2 };
+    const at = piecePlacement(z);
     const piece = spawnTreasure({ piece: true, at, collectable: mode === 'explorer' });
     if (piece && mode === 'explorer') piece.el.classList.add('treasure--collectable');
     updateProximity(); // GPS: only lights up if the kid is already close enough
@@ -530,45 +685,210 @@ function renderBag() {
 }
 
 /* ============================================================================
-   10. On-site calibration (2 taps on the map)
+   10. On-site "Set Up the Map" — capture a few fixed landmarks, solve an affine.
+   A grown-up does this ONCE: stand at a landmark, press Capture (GPS is averaged
+   over a few seconds), then tap that landmark on the map. Repeat for 3 spread-out
+   spots, then Save. Every fix is shown with its accuracy and nothing fails silently.
    ========================================================================== */
 let calibrating = false;
-let calStep = 0;
-let calPoints = [];
-let liveFix = null;
+let calStage = 'idle';        // 'idle' | 'averaging' | 'await-tap' | 'done'
+let calPoints = [];           // [{lat,lng,acc,fx,fy}]
+let calSamples = [];          // GPS fixes collected during averaging
+let calPendingFix = null;     // averaged {lat,lng,acc} waiting for a map tap
+let calAvgTimer = null;
+let calPrevCalibration = null;// restored on Cancel
+let liveFix = null;           // latest {lat,lng,acc} while calibrating
 
-const CAL_PROMPTS = [
-  'Stand by the big VENTURE OUT sign at the entrance, then tap that sign on the map. 📍',
-  'Now go to the FISHING PIER (top of the map) and tap the pier. 📍',
+const CAL_LANDMARKS = [
+  'the FISHING PIER (top of the map)',
+  'the MAIN ENTRANCE / VENTURE OUT sign (bottom)',
+  'the TENNIS COURTS or POOL (middle, off to one side)',
 ];
+const CAL_AVG_MS = 5000;      // how long to average GPS at each spot
+const CAL_AVG_MAX = 8;        // stop early once we have this many samples
+
+function nextLandmark() { return CAL_LANDMARKS[calPoints.length] || 'another spread-out spot'; }
 
 function startCalibrate() {
-  if (mode !== 'gps') { marley('Calibrate needs GPS — try it on the iPhone! 📱', 5000); return; }
-  calibrating = true; calStep = 0; calPoints = [];
-  show($('calibrateHint'));
-  setText('calibrateHint', CAL_PROMPTS[0]);
-  marley("Let's teach the map where we are! Two quick taps.", 5000);
+  if (mode !== 'gps') { marley('Set-up needs GPS — try it on the iPhone! 📱', 5000); return; }
+  calibrating = true;
+  calStage = 'idle';
+  calPoints = [];
+  calSamples = [];
+  calPendingFix = null;
+  calPrevCalibration = state.calibration;
+  clearTimeout(calAvgTimer);
+  hide($('calExportWrap'));
+  show($('calControls'));
+  show($('calPanel'));
+  renderCalPanel();
+  marley("Let's set up the map! Stand at a landmark and press Capture. 📍", 6000);
 }
-function updateCalibrateLiveFix(lat, lng) { liveFix = { lat, lng }; }
 
+// Called from onPosition on every GPS fix while calibrating.
+function onCalibrateFix(lat, lng, acc) {
+  liveFix = { lat, lng, acc: (typeof acc === 'number' && acc > 0) ? acc : 99 };
+  if (calStage === 'averaging') {
+    calSamples.push(liveFix);
+    renderCalPanel();
+    if (calSamples.length >= CAL_AVG_MAX) finishAveraging();
+  } else {
+    updateCalGauge();
+  }
+}
+
+function calStartCapture() {
+  if (!calibrating || calStage === 'averaging') return;
+  if (!liveFix) { marley('Waiting for GPS… give it a few seconds, then press Capture. 📡', 5000); return; }
+  calStage = 'averaging';
+  calSamples = [];
+  calPendingFix = null;
+  renderCalPanel();
+  clearTimeout(calAvgTimer);
+  calAvgTimer = setTimeout(finishAveraging, CAL_AVG_MS);
+}
+
+function finishAveraging() {
+  clearTimeout(calAvgTimer);
+  if (!calSamples.length) {
+    calStage = 'idle';
+    marley('No GPS yet — wait for signal, then press Capture. 📡', 5000);
+    renderCalPanel();
+    return;
+  }
+  const lat = mean(calSamples.map((s) => s.lat));
+  const lng = mean(calSamples.map((s) => s.lng));
+  const acc = Math.min.apply(null, calSamples.map((s) => s.acc));
+  calPendingFix = { lat, lng, acc };
+  calStage = 'await-tap';
+  renderCalPanel();
+  if (acc > 25) marley(`GPS is weak (±${Math.round(acc)} m). You can still tap, or move to open sky and re-capture.`, 6000);
+}
+
+// Map taps: during set-up they place the just-captured landmark.
 function onMapTap(ev) {
-  if (!calibrating || !liveFix) return;
+  if (!calibrating) return;
+  if (calStage === 'averaging') { marley('Hold still — reading GPS… 📡', 2500); return; }
+  if (calStage !== 'await-tap') { marley('Press “Capture this spot” at a landmark first. 📍', 3500); return; }
+  if (!calPendingFix) { marley('Waiting for GPS — press Capture again. 📡', 3500); return; }
   const vp = $('mapViewport');
   if (!vp) return;
   const r = vp.getBoundingClientRect();
   const fx = (ev.clientX - r.left) / r.width;
   const fy = (ev.clientY - r.top) / r.height;
-  calPoints.push({ lat: liveFix.lat, lng: liveFix.lng, fx, fy });
-  calStep += 1;
-  if (calStep < CAL_PROMPTS.length) {
-    setText('calibrateHint', CAL_PROMPTS[calStep]);
-  } else {
-    state.calibration = solveCalibration(calPoints[0], calPoints[1]);
-    state.practice = false; // a real on-site calibration replaces Practice Mode
-    save();
-    calibrating = false;
-    hide($('calibrateHint'));
-    marley('All set! The map knows where you are now. 🧭', 5000);
+  calPoints.push({ lat: calPendingFix.lat, lng: calPendingFix.lng, acc: calPendingFix.acc, fx, fy });
+  calPendingFix = null;
+  calStage = 'idle';
+  playTap();
+  renderCalPanel();
+}
+
+function calUndo() {
+  if (calStage === 'await-tap') { calStage = 'idle'; calPendingFix = null; renderCalPanel(); return; }
+  if (calPoints.length) calPoints.pop();
+  renderCalPanel();
+}
+
+function calCancel() {
+  clearTimeout(calAvgTimer);
+  calibrating = false;
+  calStage = 'idle';
+  calPoints = []; calSamples = []; calPendingFix = null;
+  state.calibration = calPrevCalibration;
+  hide($('calPanel'));
+  marley('Set-up canceled. 👍', 3000);
+}
+
+function calSolve() {
+  const res = solveAffine(calPoints);
+  if (!res.ok) { setText('calSolveHint', res.reason); marley(res.reason, 5000); return; }
+  state.calibration = { kind: 'affine', A: res.A, B: res.B, Tx: res.Tx,
+                        C: res.C, D: res.D, Ty: res.Ty, lat0: res.lat0, lng0: res.lng0,
+                        rmsPx: res.rmsPx };
+  state.practice = false; // a real set-up replaces Practice Mode
+  save();
+  calibrating = false;
+  calStage = 'done';
+  // Recompute the dot/beam/proximity live with the new map.
+  if (liveFix) { playerFrac = gpsToFraction(liveFix.lat, liveFix.lng); positionPlayerDot(); updateProximity(); }
+  requestRender();
+  showCalExport(res);
+  marley(`All set! Fit ±${Math.round(res.rmsPx)} px. The map knows where you are. 🧭`, 6000);
+}
+
+function showCalExport(res) {
+  const georef = { kind: 'affine', A: res.A, B: res.B, Tx: res.Tx,
+                   C: res.C, D: res.D, Ty: res.Ty, lat0: res.lat0, lng0: res.lng0 };
+  const round = (n, d) => Math.round(n * Math.pow(10, d)) / Math.pow(10, d);
+  const blob = {
+    points: calPoints.map((p) => ({ lat: round(p.lat, 7), lng: round(p.lng, 7),
+                                    fx: round(p.fx, 4), fy: round(p.fy, 4) })),
+    rmsPx: round(res.rmsPx, 2),
+    georef,
+  };
+  const ta = $('calExport');
+  if (ta) ta.value = JSON.stringify(blob, null, 2);
+  hide($('calControls'));
+  show($('calExportWrap'));
+  renderCalPanel();
+}
+
+function calCopy() {
+  const ta = $('calExport');
+  if (!ta) return;
+  const done = () => marley('Copied! Send it to me or paste into CONFIG.resort.georef. 📋', 4000);
+  const manual = () => { ta.focus(); ta.select(); marley('Selected — press and hold to copy. 📋', 4000); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(ta.value).then(done, manual);
+  } else { manual(); }
+}
+
+function calDone() { hide($('calPanel')); calStage = 'idle'; }
+
+function updateCalGauge() {
+  const g = $('calGps');
+  if (!g) return;
+  if (!liveFix) { g.textContent = 'GPS: locating…'; g.dataset.q = 'wait'; return; }
+  const a = Math.round(liveFix.acc);
+  g.textContent = `GPS accuracy: ±${a} m`;
+  g.dataset.q = a <= 10 ? 'good' : a <= 25 ? 'ok' : 'bad';
+}
+
+// Repaint the whole panel from state — prompt, gauge, points list, button states.
+function renderCalPanel() {
+  updateCalGauge();
+  const promptEl = $('calPrompt');
+  if (promptEl) {
+    let txt;
+    if (calStage === 'done')          txt = '🎉 Saved! Copy the code to bake it in, or press Done.';
+    else if (calStage === 'averaging')txt = `Hold still — reading GPS… (${calSamples.length}/${CAL_AVG_MAX})`;
+    else if (calStage === 'await-tap')txt = `Now TAP ${nextLandmark()} on the map. 👆`;
+    else                              txt = `Stand at ${nextLandmark()}, then press Capture. 📍`;
+    promptEl.textContent = txt;
+  }
+  const list = $('calList');
+  if (list) {
+    list.innerHTML = '';
+    calPoints.forEach((p, i) => {
+      const li = document.createElement('li');
+      const name = (CAL_LANDMARKS[i] || `Spot ${i + 1}`).replace(/\s*\(.*\)/, '');
+      li.textContent = `✓ ${i + 1}. ${name} (±${Math.round(p.acc)} m)`;
+      list.appendChild(li);
+    });
+  }
+  const isDone = calStage === 'done';
+  const cap = $('btnCalCapture'), undo = $('btnCalUndo'), solve = $('btnCalSolve');
+  if (cap) {
+    cap.disabled = calStage === 'averaging';
+    cap.textContent = calStage === 'await-tap' ? '📍 Re-capture' : '📍 Capture this spot';
+  }
+  if (undo) undo.disabled = !calPoints.length && calStage !== 'await-tap';
+  if (solve) {
+    const enough = calPoints.length >= 3;
+    solve.disabled = !enough;
+    setText('calSolveHint', enough
+      ? 'Ready to save! ✅'
+      : `Capture ${3 - calPoints.length} more spread-out spot(s) to enable Save.`);
   }
 }
 
@@ -669,22 +989,25 @@ function renderOrientation() {
 
 // Compass bearing (deg, 0=N) of the map image's "up" edge.
 function mapNorthDeg() {
-  const c = state.calibration;
-  if (!c) return 0; // Practice / pre-seed map is drawn north-up
-  // A true-north step (Δeast=0, Δnorth=1) lands at screen vector (-b, a).
-  return (Math.atan2(-c.b, -c.a) * 180 / Math.PI + 360) % 360;
+  const aff = activeAffine();
+  if (!aff) return 0; // Practice / pre-seed map is drawn north-up
+  // A true-north step (Δeast=0, Δnorth=1) lands at screen delta (B, D). The beam
+  // rotates in screen PIXELS on a 378x756 image, so scale before taking the angle;
+  // screen +y is down and the beam at 0° points up, so angle = atan2(sx, -sy).
+  const sx = aff.B * 378, sy = aff.D * 756;
+  return (Math.atan2(sx, -sy) * 180 / Math.PI + 360) % 360;
 }
 
 // Real-world compass bearing (deg, 0=N) from one map fraction to another.
 function worldBearing(from, to) {
   const dfx = to.fx - from.fx, dfy = to.fy - from.fy;
-  const c = state.calibration;
+  const aff = activeAffine();
   let east, north;
-  if (c) {
-    // Invert the similarity transform (a+bi): meters = (Δfx+iΔfy)/(a+bi).
-    const denom = c.a * c.a + c.b * c.b || 1;
-    east  = (dfx * c.a + dfy * c.b) / denom;
-    north = (dfy * c.a - dfx * c.b) / denom;
+  if (aff) {
+    // Invert the affine's 2x2 linear part [[A,B],[C,D]] (translation cancels in a delta).
+    const det = aff.A * aff.D - aff.B * aff.C || 1;
+    east  = ( aff.D * dfx - aff.B * dfy) / det;
+    north = (-aff.C * dfx + aff.A * dfy) / det;
   } else {
     // North-up map: +fx = east, −fy = north (per-axis scale, map is anisotropic).
     east  =  dfx * CONFIG.resort.approxWidthM;
@@ -885,6 +1208,12 @@ function bindUI() {
   on($('btnOpenBag'), 'click', () => { playTap(); renderBag(); showScreen('screen-bag'); });
   on($('btnBagBack'), 'click', () => { playTap(); showScreen('screen-map'); });
   on($('btnCalibrate'), 'click', () => { playTap(); startCalibrate(); });
+  on($('btnCalCapture'), 'click', () => { playTap(); calStartCapture(); });
+  on($('btnCalUndo'), 'click', () => { playTap(); calUndo(); });
+  on($('btnCalCancel'), 'click', () => { playTap(); calCancel(); });
+  on($('btnCalSolve'), 'click', () => { playTap(); calSolve(); });
+  on($('btnCalCopy'), 'click', () => { playTap(); calCopy(); });
+  on($('btnCalDone'), 'click', () => { playTap(); calDone(); });
   on($('btnWeMadeIt'), 'click', () => { playTap(); advanceZone(); });
   on($('btnCatchBack'), 'click', () => { playTap(); pendingCatch = null; endAr(); showScreen('screen-map'); });
   on($('btnSafetyOk'), 'click', () => { playTap(); hide($('safetyCard')); });
@@ -943,5 +1272,34 @@ window.MTH = {
     return `heading ${oriHeading}°, pitch ${oriPitch}°`;
   },
   reset: () => { localStorage.removeItem(SAVE_KEY); location.reload(); },
+  // Calibration debugging:
+  affine: () => activeAffine(),
+  // Self-test the affine solver: invent a known transform, sample GPS points,
+  // solve, and confirm the round-trip error is ~0 px. Returns a pass/fail report.
+  selfTest: () => {
+    const truth = { A: 0.0016, B: 0.0009, Tx: 0.42, C: -0.0007, D: -0.0011, Ty: 0.55,
+                    lat0: 30.1373, lng0: -85.747 };
+    const fwd = (lat, lng) => {
+      const m = projectMeters(lat, lng, truth.lat0, truth.lng0);
+      return { fx: truth.A * m.x + truth.B * m.y + truth.Tx,
+               fy: truth.C * m.x + truth.D * m.y + truth.Ty };
+    };
+    const pts = [
+      { lat: 30.1410, lng: -85.7485 }, { lat: 30.1335, lng: -85.7455 },
+      { lat: 30.1372, lng: -85.7430 }, { lat: 30.1390, lng: -85.7500 },
+    ].map((p) => ({ ...p, ...fwd(p.lat, p.lng) }));
+    const res = solveAffine(pts);
+    if (!res.ok) return { pass: false, reason: res.reason };
+    // Bearing round-trip: a point due north should read ~0°, due east ~90°.
+    const c0 = fwd(30.1373, -85.747), cN = fwd(30.1383, -85.747), cE = fwd(30.1373, -85.746);
+    state.calibration = res; state.practice = false;
+    const bN = worldBearing(c0, cN), bE = worldBearing(c0, cE);
+    const dN = Math.min((bN + 360) % 360, (360 - bN) % 360);   // angular dist from 0
+    const dE = Math.abs(bE - 90);
+    return { pass: res.rmsPx < 0.5 && dN < 1 && dE < 1, rmsPx: res.rmsPx,
+             bearingNorth: Math.round(bN), bearingEast: Math.round(bE),
+             mapNorthDeg: Math.round(mapNorthDeg()),
+             note: 'north≈0, east≈90 means worldBearing+affine+projection are consistent' };
+  },
 };
 })();

@@ -504,6 +504,46 @@ button {
   pointer-events: none;
 }
 
+/* "Set Up the Map" panel. The card itself is click-through (pointer-events:none)
+   so taps land on the map underneath; only its buttons/textarea capture taps. */
+.cal-panel {
+  position: absolute;
+  top: calc(var(--safe-top, 0px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: min(94%, 460px);
+  background: rgba(19, 52, 63, .93);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--white);
+  font-family: var(--font-fun);
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  border: 2px solid rgba(255, 255, 255, .2);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+  pointer-events: none;
+}
+.cal-panel button,
+.cal-panel textarea { pointer-events: auto; }
+.cal-panel__title  { font-weight: 700; font-size: 1rem; margin-bottom: 6px; }
+.cal-panel__gps    { font-weight: 700; font-size: .9rem; margin-bottom: 6px; }
+.cal-panel__gps[data-q="good"] { color: #7CFFB2; }
+.cal-panel__gps[data-q="ok"]   { color: #FFD15C; }
+.cal-panel__gps[data-q="bad"]  { color: #FF8A8A; }
+.cal-panel__gps[data-q="wait"] { color: #CFE3EA; }
+.cal-panel__prompt { font-size: .95rem; font-weight: 600; margin-bottom: 8px; min-height: 1.2em; }
+.cal-panel__list   { list-style: none; margin: 0 0 8px; padding: 0; font-size: .85rem; text-align: left; }
+.cal-panel__list:empty { display: none; }
+.cal-panel__list li { padding: 2px 0; }
+.cal-panel__row    { display: flex; gap: 8px; justify-content: center; margin-top: 6px; }
+.cal-panel__row .btn { flex: 1; padding: 10px 8px; font-size: .9rem; }
+.cal-panel__note   { font-size: .8rem; opacity: .9; margin-top: 8px; }
+.cal-panel__ta     { width: 100%; margin-top: 8px; font-family: monospace; font-size: .7rem;
+                     border-radius: 8px; padding: 8px; resize: none; border: 1px solid rgba(255,255,255,.25);
+                     background: rgba(0,0,0,.3); color: var(--white); }
+
 /* Map controls bar */
 #mapControls {
   position: relative;

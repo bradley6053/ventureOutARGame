@@ -1,7 +1,7 @@
 # PROGRESS — Marley's Treasure Hunt (Venture Out AR Adventure)
 
-**Status:** ✅ v1 (Phase A) complete + Phase C compass features added (facing beam, fixed prizes, world-anchored AR). Verified locally; sensor motion needs an on-device pass.
-**Last updated:** 2026-06-22
+**Status:** ✅ v1 (Phase A) complete + Phase C compass features added (facing beam, fixed prizes, world-anchored AR) + pre-baked affine georeference calibration. Verified locally; sensor motion + GPS calibration need an on-device pass.
+**Last updated:** 2026-06-25
 
 ---
 
@@ -49,6 +49,18 @@ Offline, Pokémon-GO-style location-based AR treasure hunt for Brad's kids (5–
 - iOS motion/orientation permission is requested inside the Start tap (alongside camera). SW bumped to `voar-v4`.
 **Verified locally:** 20/20 AR-math unit checks (Node); fixed-treasure catch loop + refill; beam cone geometry (screenshot); AR emoji placement + off-frame arrow (screenshots); zero console errors. ⚠️ **Live sensor motion can't run in the headless preview (`requestAnimationFrame` is paused when the tab isn't visible) — the moving beam / in-and-out-of-frame AR must be confirmed on the iPhone.**
 **Tuning knobs** (`AR` object in `game.js`): `fovH` 60, `fovV` 75, `elevation` −5°, `sizeNear` 172px, `sizeFar` 78px. If the treasure feels mis-aimed or wrong-sized on-device, nudge these first.
+
+### 2026-06-25 — Pre-baked affine georeference + robust "Set Up the Map" (this iteration)
+**Ask:** on-site calibration failed — the old flow needed two taps at two *far-apart* landmarks (entrance → drive → pier), and the second tap silently did nothing. Find an easier way to calibrate, closer together.
+**Root causes found:** (1) the 2-point *similarity* solve needed far-apart points to recover rotation+scale; (2) `onMapTap` bailed silently when the GPS fix went stale (`if (!calibrating || !liveFix) return;`) — no feedback, no cancel; (3) the map image is drawn *tilted* (not north-up), and the calibrated mapping was *isotropic* while distances used an *anisotropic* 520×950 metric.
+**Chosen direction (with Brad):** a **pre-baked affine georeference** — a grown-up sets up the map ONCE on-site; the app solves an affine transform, saves it (works immediately), and exports constants to bake into `CONFIG.resort.georef` so the **kids never calibrate**.
+**Done:**
+- **Affine math:** new `affineOf()` (normalizes both the new `{kind:'affine',A,B,Tx,C,D,Ty,…}` *and* legacy `{a,b,tx,ty}` saves — verified the legacy reduces exactly), `activeAffine()` precedence resolver (per-device save → baked `georef` default → north-up pre-seed; returns `null` in Practice Mode), `solve3()` (3×3 Cramer + collinear guard), `solveAffine()` (least-squares; 2 pts → similarity, 3+ → full affine that also corrects tilt + stretch; reports `rmsPx`).
+- **Consumers updated** to the affine via `activeAffine()`: `gpsToFraction`, `worldBearing` (general 2×2 inverse), `fractionMeters` (same inverse → distance now matches the mapping; fixes the iso/aniso mismatch), `mapNorthDeg` (pixel-aspect-corrected for the 378×756 image — the risky one).
+- **"Set Up the Map" UI** (replaces the 2-tap flow): stand at a landmark → **Capture** (averages ~8 GPS fixes over 5 s, shows live ±accuracy, green/amber/red) → **tap it on the map**; repeat for 3 spread-out landmarks (Pier / Entrance / Tennis-Pool) → **Save**. Undo / Cancel (restores prior calibration) / live points list / **no silent failures** (every blocked state shows text). On Save it shows a **copyable `georef` block** to bake in. Card is click-through (`pointer-events:none`) so the map stays tappable; only buttons capture.
+- **`CONFIG.resort.georef`** added (null until Brad pastes his capture). SW bumped `voar-v4 → voar-v5`.
+**Verified locally:** `MTH.selfTest()` on the shipped code → affine round-trip `rmsPx ≈ 1e-13`, `worldBearing` north→0°/east→90°, `mapNorthDeg` matches hand calc; panel layout screenshot; zero console errors; `node --check` clean. ⚠️ **On-device (the real proof) is still pending — see next steps.**
+**New debug hooks:** `MTH.affine()` dumps the active transform; `MTH.selfTest()` validates the math without GPS.
 
 ## Not yet done / next steps
 - ⏳ **On-device test** (the real proof): install on the iPhone via Safari, Airplane-Mode it, confirm the boat moves + camera works + catches persist. Then a dress-rehearsal lap on the cart.

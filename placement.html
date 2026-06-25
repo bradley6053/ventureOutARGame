@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Treasure Placement — Marley's Treasure Hunt</title>
+<style>
+  :root {
+    --bg: #0d1b2a; --panel: #14263b; --panel2: #1b3350; --ink: #eaf2fb;
+    --muted: #8aa6c4; --line: #2a445f; --accent: #ffcf5c;
+    --good: #5ad19a; --bad: #ff7a7a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--ink);
+    display: grid; grid-template-columns: 1fr 360px; height: 100vh; overflow: hidden;
+  }
+
+  /* ---- Map stage ---- */
+  #stageWrap { position: relative; overflow: auto; background: #07111c; }
+  #stage { position: relative; margin: 16px auto; width: fit-content; }
+  #map { display: block; max-width: none; box-shadow: 0 8px 40px rgba(0,0,0,.6); border-radius: 6px; }
+  #overlay { position: absolute; inset: 0; }
+
+  .band { position: absolute; left: 0; right: 0; pointer-events: none;
+    border-top: 1px dashed rgba(255,255,255,.35); border-bottom: 1px dashed rgba(255,255,255,.35); }
+  .band-label { position: absolute; left: 6px; top: 4px; font-size: 11px; font-weight: 700;
+    padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,.55); pointer-events: none; }
+
+  .marker { position: absolute; transform: translate(-50%, -50%); cursor: grab;
+    width: 34px; height: 34px; display: grid; place-items: center; font-size: 22px;
+    border-radius: 50%; background: rgba(0,0,0,.35); border: 2px solid #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,.5); user-select: none; touch-action: none; }
+  .marker.piece { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,207,92,.4); }
+  .marker.sel { outline: 3px solid var(--accent); outline-offset: 2px; z-index: 5; }
+  .marker:active { cursor: grabbing; }
+  .radius { position: absolute; transform: translate(-50%, -50%); border: 1px solid rgba(90,209,154,.7);
+    background: rgba(90,209,154,.10); border-radius: 50%; pointer-events: none; }
+  .idx { position: absolute; top: -8px; right: -8px; background: #fff; color: #000;
+    font-size: 10px; font-weight: 800; border-radius: 8px; padding: 0 4px; }
+
+  /* ---- Side panel ---- */
+  #panel { background: var(--panel); border-left: 1px solid var(--line);
+    display: flex; flex-direction: column; height: 100vh; }
+  #panel header { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  #panel header h1 { margin: 0; font-size: 16px; }
+  #panel header p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+  .scroll { overflow-y: auto; padding: 12px 16px; flex: 1; }
+  .group { margin-bottom: 16px; }
+  .group h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); margin: 0 0 8px; }
+
+  .zones { display: grid; gap: 6px; }
+  .zone-btn { display: flex; align-items: center; gap: 8px; text-align: left;
+    padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel2); color: var(--ink); cursor: pointer; font-size: 13px; }
+  .zone-btn .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .zone-btn .count { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .zone-btn.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+  .palette { display: flex; flex-wrap: wrap; gap: 6px; }
+  .emoji-btn { font-size: 18px; width: 36px; height: 36px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--panel2); cursor: pointer; }
+  .emoji-btn.active { border-color: var(--accent); background: #243f5e; }
+  .emoji-btn.piece { box-shadow: inset 0 0 0 1px var(--accent); }
+
+  .toggles label { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; }
+  .toggles input { width: 16px; height: 16px; }
+
+  .list { display: grid; gap: 4px; }
+  .row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
+    background: var(--panel2); font-size: 12px; cursor: pointer; }
+  .row.sel { outline: 2px solid var(--accent); }
+  .row .em { font-size: 16px; }
+  .row .co { color: var(--muted); font-variant-numeric: tabular-nums; flex: 1; }
+  .row .del { color: var(--bad); background: none; border: none; cursor: pointer; font-size: 14px; }
+
+  .geo { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .geo label { font-size: 11px; color: var(--muted); display: grid; gap: 2px; }
+  .geo input { background: var(--panel2); border: 1px solid var(--line); color: var(--ink);
+    border-radius: 6px; padding: 5px 6px; font-size: 12px; }
+
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    padding: 12px 16px; border-top: 1px solid var(--line); }
+  button.btn { padding: 9px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel2); color: var(--ink); cursor: pointer; font-weight: 600; font-size: 13px; }
+  button.btn.primary { background: var(--accent); color: #1a1304; border-color: var(--accent); }
+  button.btn.danger { color: var(--bad); }
+
+  dialog { background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 12px; max-width: 640px; width: 92%; padding: 0; }
+  dialog header { display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  dialog .body { padding: 14px 16px; }
+  textarea { width: 100%; min-height: 280px; background: #07111c; color: var(--good);
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: 12px/1.5 ui-monospace, Menlo, monospace; }
+  .hint { color: var(--muted); font-size: 12px; }
+  .pill { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--panel2); color: var(--muted); }
+</style>
+</head>
+<body>
+  <!-- ===== MAP STAGE ===== -->
+  <div id="stageWrap">
+    <div id="stage">
+      <img id="map" src="./assets/map/resort-map.jpg" alt="Resort map" draggable="false">
+      <div id="overlay"></div>
+    </div>
+  </div>
+
+  <!-- ===== PANEL ===== -->
+  <div id="panel">
+    <header>
+      <h1>🗺️ Treasure Placement</h1>
+      <p>Click the map to drop a treasure in the active zone. Drag to nudge, click a marker to select, Delete to remove.</p>
+    </header>
+
+    <div class="scroll">
+      <div class="group">
+        <h2>Active zone <span class="pill" id="zoneHint">click map to place</span></h2>
+        <div class="zones" id="zones"></div>
+      </div>
+
+      <div class="group">
+        <h2>Treasure for new drops</h2>
+        <div class="palette" id="palette"></div>
+      </div>
+
+      <div class="group toggles">
+        <h2>Show</h2>
+        <label><input type="checkbox" id="tBands" checked> Zone bands</label>
+        <label><input type="checkbox" id="tRadius"> 25m catch radius</label>
+        <label><input type="checkbox" id="tIndex" checked> Marker numbers</label>
+      </div>
+
+      <div class="group">
+        <h2>Placed in this zone (<span id="zoneCount">0</span>)</h2>
+        <div class="list" id="list"></div>
+      </div>
+
+      <div class="group">
+        <h2>Resort georeference (for GPS readout)</h2>
+        <div class="geo">
+          <label>Center lat<input id="gLat" type="number" step="0.00001" value="30.1373"></label>
+          <label>Center lng<input id="gLng" type="number" step="0.00001" value="-85.747"></label>
+          <label>Width (m, E-W)<input id="gW" type="number" step="1" value="520"></label>
+          <label>Height (m, N-S)<input id="gH" type="number" step="1" value="950"></label>
+        </div>
+        <p class="hint" style="margin:8px 0 0">Matches <code>CONFIG.resort</code> in game.js. fx/fy is what the game uses; lat/lng is informational.</p>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn primary" id="btnExport">Export ⬇︎</button>
+      <button class="btn" id="btnImport">Import</button>
+      <button class="btn" id="btnPreset">Seed from bands</button>
+      <button class="btn danger" id="btnClearZone">Clear zone</button>
+    </div>
+  </div>
+
+  <!-- ===== EXPORT / IMPORT DIALOG ===== -->
+  <dialog id="dlg">
+    <header>
+      <strong id="dlgTitle">Export</strong>
+      <button class="btn" id="dlgClose">Close</button>
+    </header>
+    <div class="body">
+      <p class="hint" id="dlgHint"></p>
+      <textarea id="dlgText" spellcheck="false"></textarea>
+      <div class="actions" style="border:0;padding:12px 0 0">
+        <button class="btn primary" id="dlgCopy">Copy to clipboard</button>
+        <button class="btn" id="dlgDownload">Download .json</button>
+      </div>
+    </div>
+  </dialog>
+
+<script>
+/* ============================================================================
+   Zone definitions — kept in sync with CONFIG.zones in game.js.
+   ========================================================================== */
+const ZONES = [
+  { name: 'The Lagoon & Fishing Pier', color: '#4fc3f7', band: [0.03, 0.16],
+    emojis: ['🐠','🐟','🐚','⭐'], piece: '🗺️' },
+  { name: 'The Marine Streets', color: '#ba68c8', band: [0.18, 0.52],
+    emojis: ['🪙','🐚','🦀','💎'], piece: '🗺️' },
+  { name: 'The Amenities Hub', color: '#ffb74d', band: [0.54, 0.69],
+    emojis: ['🏴‍☠️','🪙','🥥','🦜'], piece: '🗺️' },
+  { name: 'The Big Crossing', color: '#e57373', band: [0.70, 0.81],
+    emojis: ['🧭','🪙'], piece: '🗺️' },
+  { name: 'The Beach & Pool', color: '#81c784', band: [0.83, 0.97],
+    emojis: ['🐢','🐬','🪙','🐚'], piece: '🧰' },
+];
+
+const STORAGE_KEY = 'voar_placement_v1';
+const R = 6378137; // earth radius (m), matches projectMeters in game.js
+
+/* state: array of {id, zone, fx, fy, emoji, isPiece} */
+let spots = [];
+let activeZone = 0;
+let activeEmoji = ZONES[0].emojis[0];
+let activePiece = false;
+let selectedId = null;
+let nextId = 1;
+
+const $ = (id) => document.getElementById(id);
+const overlay = $('overlay'), mapImg = $('map');
+
+/* ---- geo helpers (inverse of game.js gpsToFraction, resort branch) ---- */
+function geo() {
+  return { lat0: +$('gLat').value, lng0: +$('gLng').value, w: +$('gW').value, h: +$('gH').value };
+}
+function fracToLatLng(fx, fy) {
+  const g = geo();
+  const x = (fx - 0.5) * g.w;            // east meters
+  const y = (0.5 - fy) * g.h;            // north meters
+  const lng = g.lng0 + x / (Math.cos(g.lat0 * Math.PI / 180) * R) * (180 / Math.PI);
+  const lat = g.lat0 + y / 110540 * 1;   // 110540 m per degree lat (matches game.js)
+  return { lat, lng };
+}
+
+/* ============================================================================
+   Rendering
+   ========================================================================== */
+function render() {
+  overlay.innerHTML = '';
+  const showBands = $('tBands').checked;
+  const showRadius = $('tRadius').checked;
+  const showIdx = $('tIndex').checked;
+  const g = geo();
+
+  // bands
+  if (showBands) {
+    ZONES.forEach((z, i) => {
+      const b = document.createElement('div');
+      b.className = 'band';
+      b.style.top = (z.band[0] * 100) + '%';
+      b.style.height = ((z.band[1] - z.band[0]) * 100) + '%';
+      b.style.background = hexA(z.color, i === activeZone ? 0.16 : 0.06);
+      const lab = document.createElement('div');
+      lab.className = 'band-label';
+      lab.style.color = z.color;
+      lab.textContent = (i + 1) + '. ' + z.name;
+      b.appendChild(lab);
+      overlay.appendChild(b);
+    });
+  }
+
+  // radius ellipse size in % (E-W uses width m, N-S uses height m)
+  const rxPct = (25 / g.w) * 100, ryPct = (25 / g.h) * 100;
+
+  // markers (numbered per-zone in placement order)
+  const perZoneCount = {};
+  spots.forEach((s) => {
+    perZoneCount[s.zone] = (perZoneCount[s.zone] || 0) + 1;
+    const z = ZONES[s.zone];
+
+    if (showRadius) {
+      const r = document.createElement('div');
+      r.className = 'radius';
+      r.style.left = (s.fx * 100) + '%';
+      r.style.top = (s.fy * 100) + '%';
+      r.style.width = (rxPct * 2) + '%';
+      r.style.height = (ryPct * 2) + '%';
+      overlay.appendChild(r);
+    }
+
+    const m = document.createElement('div');
+    m.className = 'marker' + (s.isPiece ? ' piece' : '') + (s.id === selectedId ? ' sel' : '');
+    m.style.left = (s.fx * 100) + '%';
+    m.style.top = (s.fy * 100) + '%';
+    m.style.borderColor = s.id === selectedId ? '#ffcf5c' : z.color;
+    m.textContent = s.emoji;
+    m.dataset.id = s.id;
+    if (showIdx) {
+      const n = document.createElement('span');
+      n.className = 'idx'; n.textContent = perZoneCount[s.zone];
+      m.appendChild(n);
+    }
+    overlay.appendChild(m);
+    attachDrag(m, s);
+  });
+
+  renderZones();
+  renderPalette();
+  renderList();
+}
+
+function renderZones() {
+  const el = $('zones'); el.innerHTML = '';
+  ZONES.forEach((z, i) => {
+    const n = spots.filter((s) => s.zone === i).length;
+    const b = document.createElement('button');
+    b.className = 'zone-btn' + (i === activeZone ? ' active' : '');
+    b.innerHTML = `<span class="dot" style="background:${z.color}"></span>${i + 1}. ${z.name}<span class="count">${n}</span>`;
+    b.onclick = () => { activeZone = i; activeEmoji = z.emojis[0]; activePiece = false; render(); };
+    el.appendChild(b);
+  });
+}
+
+function renderPalette() {
+  const el = $('palette'); el.innerHTML = '';
+  const z = ZONES[activeZone];
+  z.emojis.forEach((e) => {
+    const b = document.createElement('button');
+    b.className = 'emoji-btn' + (!activePiece && e === activeEmoji ? ' active' : '');
+    b.textContent = e;
+    b.onclick = () => { activeEmoji = e; activePiece = false; renderPalette(); };
+    el.appendChild(b);
+  });
+  const p = document.createElement('button');
+  p.className = 'emoji-btn piece' + (activePiece ? ' active' : '');
+  p.textContent = z.piece;
+  p.title = 'Map piece / chest';
+  p.onclick = () => { activePiece = true; renderPalette(); };
+  el.appendChild(p);
+}
+
+function renderList() {
+  const list = spots.filter((s) => s.zone === activeZone);
+  $('zoneCount').textContent = list.length;
+  const el = $('list'); el.innerHTML = '';
+  list.forEach((s, i) => {
+    const ll = fracToLatLng(s.fx, s.fy);
+    const row = document.createElement('div');
+    row.className = 'row' + (s.id === selectedId ? ' sel' : '');
+    row.innerHTML =
+      `<span class="em">${s.emoji}</span>` +
+      `<span class="co">#${i + 1} · fx ${s.fx.toFixed(3)}, fy ${s.fy.toFixed(3)}<br>` +
+      `<span style="opacity:.7">${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}${s.isPiece ? ' · 🧩 piece' : ''}</span></span>` +
+      `<button class="del" title="Delete">✕</button>`;
+    row.onclick = (e) => {
+      if (e.target.classList.contains('del')) { removeSpot(s.id); return; }
+      selectedId = s.id; render();
+    };
+    el.appendChild(row);
+  });
+}
+
+/* ============================================================================
+   Interaction — place / drag / delete
+   ========================================================================== */
+function mapFracFromEvent(clientX, clientY) {
+  const r = mapImg.getBoundingClientRect();
+  return {
+    fx: clamp((clientX - r.left) / r.width),
+    fy: clamp((clientY - r.top) / r.height),
+  };
+}
+const clamp = (v) => Math.max(0, Math.min(1, v));
+
+overlay.addEventListener('pointerdown', (e) => {
+  // Click on empty map → place a new marker. (Marker drags are handled separately.)
+  if (e.target.closest('.marker')) return;
+  const { fx, fy } = mapFracFromEvent(e.clientX, e.clientY);
+  const z = ZONES[activeZone];
+  const s = { id: nextId++, zone: activeZone, fx, fy,
+    emoji: activePiece ? z.piece : activeEmoji, isPiece: activePiece };
+  spots.push(s);
+  selectedId = s.id;
+  save(); render();
+});
+
+function attachDrag(el, s) {
+  el.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    selectedId = s.id; render();
+    el.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      const { fx, fy } = mapFracFromEvent(ev.clientX, ev.clientY);
+      s.fx = fx; s.fy = fy;
+      // live-update without full rebuild for smoothness
+      const live = overlay.querySelector(`.marker[data-id="${s.id}"]`);
+      if (live) { live.style.left = (fx * 100) + '%'; live.style.top = (fy * 100) + '%'; }
+    };
+    const up = () => {
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      save(); render();
+    };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+  });
+}
+
+function removeSpot(id) {
+  spots = spots.filter((s) => s.id !== id);
+  if (selectedId === id) selectedId = null;
+  save(); render();
+}
+
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId != null) {
+    e.preventDefault(); removeSpot(selectedId);
+  }
+});
+
+/* ============================================================================
+   Persistence + import/export
+   ========================================================================== */
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ spots, geo: geo() }));
+}
+function load() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (raw && Array.isArray(raw.spots)) {
+      spots = raw.spots;
+      nextId = spots.reduce((m, s) => Math.max(m, s.id), 0) + 1;
+      if (raw.geo) {
+        $('gLat').value = raw.geo.lat0; $('gLng').value = raw.geo.lng0;
+        $('gW').value = raw.geo.w; $('gH').value = raw.geo.h;
+      }
+    }
+  } catch (_) {}
+}
+
+function buildExport() {
+  // Per-zone arrays of {fx,fy,emoji,piece} rounded to 4 decimals.
+  const byZone = ZONES.map((z, i) => ({
+    zone: i,
+    name: z.name,
+    spots: spots.filter((s) => s.zone === i).map((s) => ({
+      fx: +s.fx.toFixed(4), fy: +s.fy.toFixed(4),
+      emoji: s.emoji, piece: !!s.isPiece,
+      ...latLngRounded(s),
+    })),
+  }));
+  return byZone;
+}
+function latLngRounded(s) {
+  const ll = fracToLatLng(s.fx, s.fy);
+  return { lat: +ll.lat.toFixed(6), lng: +ll.lng.toFixed(6) };
+}
+
+function exportText() {
+  const data = buildExport();
+  const js =
+`/* Generated by placement.html — paste each array into the matching zone in
+   CONFIG.zones as a "spots" property, e.g. zones[0].spots = [...].
+   Each spot: { fx, fy } fraction of the map image (what the game positions by).
+   emoji/piece/lat/lng included for reference. */
+const PLACEMENTS = ${JSON.stringify(data, null, 2)};
+`;
+  return js;
+}
+
+function openDialog(title, hint, text, readonly) {
+  $('dlgTitle').textContent = title;
+  $('dlgHint').textContent = hint;
+  $('dlgText').value = text;
+  $('dlgText').readOnly = !!readonly;
+  $('dlg').showModal();
+}
+
+$('btnExport').onclick = () =>
+  openDialog('Export placements',
+    'Copy this into game.js, or download the JSON to keep a backup.',
+    exportText(), true);
+
+$('btnImport').onclick = () =>
+  openDialog('Import placements',
+    'Paste a previously exported snippet (the PLACEMENTS array or raw JSON) and click Copy→nothing; just Close to apply.',
+    '', false);
+
+$('dlgClose').onclick = () => {
+  // On import dialog, try to parse pasted content when closing.
+  if ($('dlgTitle').textContent.startsWith('Import')) tryImport($('dlgText').value);
+  $('dlg').close();
+};
+$('dlgCopy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('dlgText').value); $('dlgCopy').textContent = 'Copied ✓'; }
+  catch (_) { $('dlgText').select(); document.execCommand('copy'); }
+  setTimeout(() => ($('dlgCopy').textContent = 'Copy to clipboard'), 1200);
+};
+$('dlgDownload').onclick = () => {
+  const blob = new Blob([JSON.stringify(buildExport(), null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'treasure-placements.json';
+  a.click();
+};
+
+function tryImport(txt) {
+  if (!txt.trim()) return;
+  let data;
+  try {
+    const m = txt.match(/\[[\s\S]*\]/); // grab the first JSON array in the text
+    data = JSON.parse(m ? m[0] : txt);
+  } catch (e) { alert('Could not parse — paste the exported JSON / PLACEMENTS array.'); return; }
+  spots = []; nextId = 1;
+  data.forEach((z) => {
+    const zi = (typeof z.zone === 'number') ? z.zone
+      : ZONES.findIndex((zz) => zz.name === z.name);
+    (z.spots || []).forEach((sp) => {
+      spots.push({ id: nextId++, zone: zi < 0 ? 0 : zi,
+        fx: sp.fx, fy: sp.fy, emoji: sp.emoji || ZONES[zi]?.emojis[0] || '⭐',
+        isPiece: !!sp.piece });
+    });
+  });
+  selectedId = null; save(); render();
+}
+
+/* Seed one marker per existing band randomly (mirrors current game behaviour),
+   as a starting point you then drag onto roads/paths. */
+$('btnPreset').onclick = () => {
+  const z = ZONES[activeZone];
+  for (let i = 0; i < 4; i++) {
+    const fx = 0.15 + Math.random() * 0.70;
+    const fy = z.band[0] + Math.random() * (z.band[1] - z.band[0]);
+    spots.push({ id: nextId++, zone: activeZone, fx, fy, emoji: z.emojis[i % z.emojis.length], isPiece: false });
+  }
+  // a piece near the band centre
+  spots.push({ id: nextId++, zone: activeZone, fx: 0.5,
+    fy: (z.band[0] + z.band[1]) / 2, emoji: z.piece, isPiece: true });
+  save(); render();
+};
+
+$('btnClearZone').onclick = () => {
+  if (!confirm(`Remove all placements in "${ZONES[activeZone].name}"?`)) return;
+  spots = spots.filter((s) => s.zone !== activeZone);
+  selectedId = null; save(); render();
+};
+
+['tBands', 'tRadius', 'tIndex'].forEach((id) => $(id).addEventListener('change', render));
+['gLat', 'gLng', 'gW', 'gH'].forEach((id) => $(id).addEventListener('input', () => { save(); render(); }));
+
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
+
+/* boot */
+mapImg.addEventListener('load', render);
+if (mapImg.complete) render();
+load();
+render();
+</script>
+</body>
+</html>
