@@ -5,7 +5,7 @@
    pitfalls), then serve cache-first. Bump CACHE_VERSION whenever you change any
    file so phones pull the fresh copy on the next online launch.
    ========================================================================== */
-const CACHE_VERSION = 'voar-v6';
+const CACHE_VERSION = 'voar-v7';
 
 // Every file the game needs offline. Relative paths so it works on GitHub Pages
 // subpaths (https://user.github.io/repo/) and on localhost alike.

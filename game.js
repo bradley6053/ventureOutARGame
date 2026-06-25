@@ -25,7 +25,17 @@ const CONFIG = {
     // Baked-in georeference: paste the {kind:'affine', A,B,Tx,C,D,Ty,lat0,lng0}
     // block exported by the on-site "Set Up the Map" tool here, and the game is
     // accurate for everyone on first open — no calibration needed. null = none yet.
-    georef: null,
+    georef: {
+      kind: 'affine',
+      A: 0.004705619556442962,
+      B: -0.0008486550739648241,
+      Tx: 0.5771144278648879,
+      C: -0.00014539594104527714,
+      D: -0.001121996039277213,
+      Ty: 0.576291079811973,
+      lat0: 30.138631865062223,
+      lng0: -85.7463842226157,
+    },
   },
 
   catchRadiusM: 25,       // how close (meters) before a treasure can be tapped
