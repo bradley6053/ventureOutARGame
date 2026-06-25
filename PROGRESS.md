@@ -62,6 +62,16 @@ Offline, Pokémon-GO-style location-based AR treasure hunt for Brad's kids (5–
 **Verified locally:** `MTH.selfTest()` on the shipped code → affine round-trip `rmsPx ≈ 1e-13`, `worldBearing` north→0°/east→90°, `mapNorthDeg` matches hand calc; panel layout screenshot; zero console errors; `node --check` clean. ⚠️ **On-device (the real proof) is still pending — see next steps.**
 **New debug hooks:** `MTH.affine()` dumps the active transform; `MTH.selfTest()` validates the math without GPS.
 
+### 2026-06-25 — Free zone picker (◀ ▶), replacing the linear flow (this iteration)
+**Ask:** "a way to click through different zones so the user can pick where they want to search."
+**Decision (with Brad):** ◀ ▶ arrows on the zone chip (compact, in the top bar); they **replace** the old "We made it! →" forward-only button; finished zones are **revisitable** (marked ✓, not locked).
+**Done:**
+- **`#zoneChip` arrows:** added `#btnZonePrev` / `#btnZoneNext` (◀ ▶) plus a `#zoneDone` ✓ marker inside the chip. New `goToZone(i)` wraps both directions across the 5 zones, `resetZoom()`s so the new zone is visible, then `startZone(true)` (banner + Marley intro + safety card for zone 4 re-fires on entry). `prevZone`/`nextZone` wired in `bindUI`.
+- **Removed** `#btnWeMadeIt` + `advanceZone()` + the now-dead `.btn--ready` rule.
+- **Completion tracking:** `state.zonesDone[]` (per-zone bool). `zoneComplete()` sets it; `updateHUD()` toggles the ✓ and a green `chip--done` border for the current zone. Map-piece tally is **guarded** (`if (t.isPiece && !state.zonesDone[i])`) so re-catching a piece in a finished zone doesn't inflate `0/5`. Old saves migrate cleanly (missing `zonesDone` → `[]`).
+- **CSS:** `#zoneName` now ellipsizes (not the whole chip); `.zone-arrow` (30px tap targets, press feedback); `.zone-done` (green ✓). SW bumped `voar-v8 → voar-v9`.
+**Verified locally** (headless Chromium, 390×844): next/prev cycle through zones, **wraparound** works (prev from zone 0 → Beach & Pool), ✓ + green border appear when a zone is marked done and not before, the piece tally doesn't double-count, **zero console errors**; chip screenshots reviewed (done + not-done states).
+
 ## Not yet done / next steps
 - ⏳ **On-device test** (the real proof): install on the iPhone via Safari, Airplane-Mode it, confirm the boat moves + camera works + catches persist. Then a dress-rehearsal lap on the cart.
 - ⏳ **Deploy** to GitHub Pages (or Netlify Drop) — see README.

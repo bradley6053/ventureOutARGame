@@ -182,6 +182,7 @@ function freshState() {
     zoneIndex: 0,
     zoneProgress: 0,      // catches made in the current zone
     pieceSpawned: false,  // has this zone's map piece appeared yet?
+    zonesDone: [],        // per-zone: true once its map piece has been found
     pieces: 0,            // map pieces / chest collected (0..5)
     collected: {},        // emoji -> count, for the Treasure Bag
     calibration: null,    // {kind:'affine',A,B,Tx,C,D,Ty,lat0,lng0} once set up on-site
@@ -703,7 +704,11 @@ function doCatch(c) {
   state.score += t.value;
   state.collected[t.emoji] = (state.collected[t.emoji] || 0) + 1;
   state.zoneProgress += 1;
-  if (t.isPiece) state.pieces = Math.min(TOTAL_PIECES, state.pieces + 1);
+  // Count the map piece once per zone — re-visiting a finished zone for fun
+  // shouldn't inflate the 0/5 tally.
+  if (t.isPiece && !state.zonesDone[state.zoneIndex]) {
+    state.pieces = Math.min(TOTAL_PIECES, state.pieces + 1);
+  }
   updateHUD();
   save();
 
@@ -765,25 +770,26 @@ function startZone(showIntro) {
 
 function zoneComplete() {
   const z = zone();
+  state.zonesDone[state.zoneIndex] = true;
+  save();
+  updateHUD();
   if (z.isFinale) { win(); return; }
   playZoneChime();
-  marley("Hooray! Zone cleared! 🎉 Drive to the next stop, then tap “We made it!”", 6000);
-  const b = $('btnWeMadeIt');
-  if (b) b.classList.add('btn--ready');
+  marley("Hooray! Zone cleared! 🎉 Use the ◀ ▶ arrows up top to pick where to search next.", 6000);
 }
 
-function advanceZone() {
+// Free zone picker: the ◀ ▶ arrows on the zone chip jump to any zone (wrapping
+// around the 5). Kids choose where to search; finished zones stay open to roam.
+function goToZone(i) {
   if (state.done) return;
-  if (state.zoneIndex >= CONFIG.zones.length - 1) {
-    // On the last zone, the button nudges toward the chest instead of advancing.
-    marley("We're at the beach! Catch treasures to make the GRAND CHEST appear! 🏴‍☠️", 5000);
-    return;
-  }
-  state.zoneIndex += 1;
-  const b = $('btnWeMadeIt'); if (b) b.classList.remove('btn--ready');
+  const n = CONFIG.zones.length;
+  state.zoneIndex = ((i % n) + n) % n; // wrap both directions
+  resetZoom();                          // show the whole map so the new zone is visible
   save();
   startZone(true);
 }
+function prevZone() { goToZone(state.zoneIndex - 1); }
+function nextZone() { goToZone(state.zoneIndex + 1); }
 
 function win() {
   state.done = true;
@@ -811,6 +817,9 @@ function updateHUD() {
   setText('scoreValue', state.score);
   setText('mapPieceValue', state.pieces);
   setText('zoneName', zone().name);
+  const done = !!(state.zonesDone && state.zonesDone[state.zoneIndex]);
+  const d = $('zoneDone'); if (d) d.classList.toggle('hidden', !done);
+  const chip = $('zoneChip'); if (chip) chip.classList.toggle('chip--done', done);
 }
 
 function updatePracticeBtn() {
@@ -1427,7 +1436,8 @@ function bindUI() {
   on($('btnCalMin'), 'click', () => { playTap(); calToggleMin(); });
   setupCalDrag();
   setupMapGestures();
-  on($('btnWeMadeIt'), 'click', () => { playTap(); advanceZone(); });
+  on($('btnZonePrev'), 'click', () => { playTap(); prevZone(); });
+  on($('btnZoneNext'), 'click', () => { playTap(); nextZone(); });
   on($('btnCatchBack'), 'click', () => { playTap(); pendingCatch = null; endAr(); showScreen('screen-map'); });
   on($('btnSafetyOk'), 'click', () => { playTap(); hide($('safetyCard')); });
   on($('btnPlayAgain'), 'click', () => { playTap(); playAgain(); });

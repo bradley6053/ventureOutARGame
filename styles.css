@@ -226,11 +226,50 @@ button {
 .chip--zone {
   flex: 1 1 0;
   min-width: 0;
-  max-width: 54%;
+  max-width: 60%;
+  overflow: hidden;
+  font-size: clamp(.75rem, 2.4vw, .95rem);
+  gap: 2px;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.chip--zone #zoneName {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: clamp(.75rem, 2.4vw, .95rem);
+  white-space: nowrap;
+  text-align: center;
 }
+/* ◀ ▶ zone picker arrows live inside the zone chip */
+.zone-arrow {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-height: 34px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--white);
+  font-size: .9rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .12s ease, background .12s ease, opacity .12s ease;
+}
+.zone-arrow:hover { background: rgba(255,255,255,.12); }
+.zone-arrow:active { transform: scale(.86); opacity: .7; }
+/* ✓ shown when the current zone's map piece is found */
+.zone-done {
+  flex: 0 0 auto;
+  color: #5BE6A8;
+  font-weight: 900;
+  font-size: .95em;
+}
+.chip--done { border-color: rgba(91,230,168,.55); }
 
 .chip--score { color: var(--gold); }
 .chip--map   { color: #A8E6F0; }
@@ -619,11 +658,6 @@ button {
   padding: 12px 8px;
   font-size: clamp(.8rem, 2.8vw, 1rem);
 }
-
-#btnWeMadeIt {
-  flex: 1.3 1 0;
-}
-
 
 /* ── 9. MAP TREASURES (JS-created, CSS-only styling) ────────── */
 .treasure {
@@ -1355,12 +1389,6 @@ body.no-camera #screen-catch {
     0 0 18px 6px rgba(255,255,255,.75),
     0 0 44px 14px rgba(255,201,64,.55),
     var(--shadow-lg);
-}
-
-/* "We made it!" button highlight once a zone is cleared. */
-.btn--ready {
-  animation: pulse 1.1s ease-in-out infinite;
-  filter: brightness(1.08) saturate(1.1);
 }
 
 /* Practice Mode toggle on the title screen (testing aid, away from the resort). */

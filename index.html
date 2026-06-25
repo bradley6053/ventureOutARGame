@@ -83,7 +83,10 @@
     <!-- HUD (top bar) -->
     <div id="hud">
       <div id="zoneChip" class="chip chip--zone">
+        <button id="btnZonePrev" class="zone-arrow" type="button" aria-label="Previous zone">◀</button>
         <span id="zoneName">The Lagoon &amp; Fishing Pier</span>
+        <span id="zoneDone" class="zone-done hidden" aria-hidden="true">✓</span>
+        <button id="btnZoneNext" class="zone-arrow" type="button" aria-label="Next zone">▶</button>
       </div>
       <div id="scoreChip" class="chip chip--score">
         ⭐ <span id="scoreValue">0</span>
@@ -144,7 +147,6 @@
     <div id="mapControls">
       <button id="btnOpenBag" class="btn btn--ghost">👝 Bag</button>
       <button id="btnCalibrate" class="btn btn--ghost">📍 Calibrate</button>
-      <button id="btnWeMadeIt" class="btn btn--primary">We made it! →</button>
     </div>
 
   </section>
