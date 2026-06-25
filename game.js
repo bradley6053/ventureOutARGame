@@ -14,7 +14,7 @@
 
 // App version — shown on the title screen so you can tell which build is live
 // after a refresh. Keep this in step with CACHE_VERSION in sw.js.
-const APP_VERSION = 'v8';
+const APP_VERSION = 'v9';
 
 /* ============================================================================
    1. CONFIG  — the one place to change zones, treasures, and tuning.
@@ -595,6 +595,7 @@ function spawnTreasure(opts = {}) {
   el.type = 'button';
   el.dataset.emoji = def.emoji;
   el.textContent = def.emoji;
+  el.setAttribute('aria-label', isPiece ? 'Map piece — tap to catch it' : 'Treasure — tap to catch it');
   el.style.left = (spot.fx * 100) + '%';
   el.style.top  = (spot.fy * 100) + '%';
 
@@ -675,6 +676,7 @@ function openCatch(t) {
     c.className = 'catch-treasure';
     c.type = 'button';
     c.textContent = t.emoji;
+    c.setAttribute('aria-label', t.isPiece ? 'Map piece — tap to catch it' : 'Treasure — tap to catch it');
     on(c, 'click', () => doCatch(c));
     layer.appendChild(c);
     arEl = c;
@@ -697,6 +699,7 @@ function doCatch(c) {
   if (!t) return;
   pendingCatch = null;
   playCollect(t.isPiece);
+  haptic(t.isPiece ? [40, 60, 40, 60, 80] : 30);
   c.classList.add('catch-treasure--caught');
   sparkleBurst(c);
 
@@ -795,6 +798,7 @@ function win() {
   state.done = true;
   save();
   playWin();
+  haptic([60, 40, 60, 40, 120]);
   setText('winScore', `You scored ${state.score} points and found all ${state.pieces} treasures! 🏆`);
   showScreen('screen-win');
   confettiRain();
@@ -848,9 +852,16 @@ function flashBanner() {
   bannerTimer = setTimeout(() => hide(b), 2600);
 }
 
+let safetyReturnFocus = null;
 function showSafety(text) {
   setText('safetyText', text);
   show($('safetyCard'));
+  haptic([30, 80, 30]);
+  // Move focus into the dialog so it's announced and the OK button is reachable;
+  // remember where focus was so we can restore it on dismiss.
+  safetyReturnFocus = document.activeElement;
+  const ok = $('btnSafetyOk');
+  if (ok) ok.focus();
 }
 
 function renderBag() {
@@ -1324,6 +1335,12 @@ function playWin() {
     tone(f, 0.22, 'triangle', 0.18, i * 0.16));
 }
 
+/* Gentle haptic buzz to reinforce key moments. No-op on iOS Safari (which
+   ignores navigator.vibrate); the guard keeps it harmless everywhere. */
+function haptic(pattern) {
+  try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+}
+
 /* ============================================================================
    13. Particle effects
    ========================================================================== */
@@ -1439,7 +1456,12 @@ function bindUI() {
   on($('btnZonePrev'), 'click', () => { playTap(); prevZone(); });
   on($('btnZoneNext'), 'click', () => { playTap(); nextZone(); });
   on($('btnCatchBack'), 'click', () => { playTap(); pendingCatch = null; endAr(); showScreen('screen-map'); });
-  on($('btnSafetyOk'), 'click', () => { playTap(); hide($('safetyCard')); });
+  on($('btnSafetyOk'), 'click', () => {
+    playTap();
+    hide($('safetyCard'));
+    if (safetyReturnFocus && safetyReturnFocus.focus) safetyReturnFocus.focus();
+    safetyReturnFocus = null;
+  });
   on($('btnPlayAgain'), 'click', () => { playTap(); playAgain(); });
 
   // Tap a treasure on the map -> open the catch screen (only if it's in range).

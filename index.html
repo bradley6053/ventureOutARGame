@@ -88,10 +88,10 @@
         <span id="zoneDone" class="zone-done hidden" aria-hidden="true">✓</span>
         <button id="btnZoneNext" class="zone-arrow" type="button" aria-label="Next zone">▶</button>
       </div>
-      <div id="scoreChip" class="chip chip--score">
+      <div id="scoreChip" class="chip chip--score" aria-live="polite" aria-atomic="true">
         ⭐ <span id="scoreValue">0</span>
       </div>
-      <div id="mapPieceChip" class="chip chip--map">
+      <div id="mapPieceChip" class="chip chip--map" aria-live="polite" aria-atomic="true">
         🗺️ <span id="mapPieceValue">0</span>/5
       </div>
     </div>
@@ -114,14 +114,14 @@
 
     <!-- "Set Up the Map" panel (floats over map; card is click-through so the
          map stays tappable — only its buttons capture taps). -->
-    <div id="calPanel" class="cal-panel hidden">
+    <div id="calPanel" class="cal-panel hidden" role="group" aria-labelledby="calPanelTitle">
       <div id="calBar" class="cal-panel__bar">
         <span class="cal-panel__grip" aria-hidden="true">⠿</span>
-        <span class="cal-panel__title">📍 Set Up the Map</span>
+        <span id="calPanelTitle" class="cal-panel__title">📍 Set Up the Map</span>
         <button id="btnCalMin" type="button" class="cal-panel__min" aria-label="Minimize panel" title="Minimize">▾</button>
       </div>
       <div id="calBody" class="cal-panel__body">
-      <div id="calGps" class="cal-panel__gps" data-q="wait">GPS: locating…</div>
+      <div id="calGps" class="cal-panel__gps" data-q="wait" aria-live="polite">GPS: locating…</div>
       <div id="calPrompt" class="cal-panel__prompt"></div>
       <ul id="calList" class="cal-panel__list"></ul>
       <div id="calControls">
@@ -234,21 +234,21 @@
   ═══════════════════════════════════════════ -->
 
   <!-- Marley's speech bubble -->
-  <div id="marleyBubble" class="marley hidden">
-    <span class="marley__avatar">🐠</span>
+  <div id="marleyBubble" class="marley hidden" aria-live="polite" aria-atomic="true">
+    <span class="marley__avatar" aria-hidden="true">🐠</span>
     <p id="marleyText"></p>
   </div>
 
   <!-- Zone intro banner -->
-  <div id="zoneBanner" class="banner hidden">
-    <span id="zoneBannerEmoji">🏝️</span>
+  <div id="zoneBanner" class="banner hidden" aria-live="polite" aria-atomic="true">
+    <span id="zoneBannerEmoji" aria-hidden="true">🏝️</span>
     <h2 id="zoneBannerName"></h2>
   </div>
 
   <!-- Safety modal -->
-  <div id="safetyCard" class="modal hidden">
+  <div id="safetyCard" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="safetyText">
     <div class="modal__box">
-      <span class="modal__emoji">🛟</span>
+      <span class="modal__emoji" aria-hidden="true">🛟</span>
       <p id="safetyText"></p>
       <button id="btnSafetyOk" class="btn btn--primary">Aye aye, Captain! 🫡</button>
     </div>

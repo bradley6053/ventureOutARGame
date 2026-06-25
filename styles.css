@@ -28,7 +28,6 @@
   --ocean-darker:  #0F4F60;
   --sand:          #F6E2B3;
   --sand-dark:     #E8C97A;
-  --coral:         #FF6B5C;
   --gold:          #FFC940;
   --gold-dark:     #E8A800;
   --sunset-a:      #FF8A4C;
@@ -52,6 +51,15 @@
   /* Touch targets */
   --tap-min:  64px;
   --tap-pref: 96px;
+
+  /* Frosted-glass surfaces (dark teal). Standardized opacity stops so HUD
+     stays readable in bright outdoor sun. Higher number = more opaque.
+     1 = light (ghost buttons) · 2 = medium (chips/hints) · 3 = heavy (panels/modals). */
+  --glass-1:      rgba(19, 52, 63, .72);
+  --glass-2:      rgba(19, 52, 63, .82);
+  --glass-3:      rgba(19, 52, 63, .92);
+  --glass-border: rgba(255, 255, 255, .28);
+  --glass-blur:   blur(10px);
 
   /* Shadows */
   --shadow-sm:  0 2px 8px rgba(19,52,63,.18);
@@ -103,6 +111,13 @@ button {
   border: none;
   background: none;
   touch-action: manipulation;
+}
+
+/* Visible focus ring for keyboard / switch-control users only — :focus-visible
+   keeps it off plain touch taps so it never flashes during normal play. */
+:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
 }
 
 
@@ -182,23 +197,23 @@ button {
 
 /* Ghost — translucent dark teal pill */
 .btn--ghost {
-  background: rgba(19, 52, 63, .55);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--glass-1);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   color: var(--white);
-  border: 2px solid rgba(255,255,255,.25);
+  border: 2px solid var(--glass-border);
   box-shadow: var(--shadow-sm);
 }
 
 .btn--ghost:active {
   transform: scale(.95);
-  background: rgba(19, 52, 63, .75);
+  background: var(--glass-2);
 }
 
 /* Shared hover on non-touch */
 @media (hover: hover) {
   .btn--primary:hover { filter: brightness(1.06); }
-  .btn--ghost:hover   { background: rgba(19,52,63,.75); }
+  .btn--ghost:hover   { background: var(--glass-2); }
 }
 
 
@@ -214,11 +229,11 @@ button {
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
-  background: rgba(19, 52, 63, .65);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: var(--glass-2);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   color: var(--white);
-  border: 1.5px solid rgba(255,255,255,.2);
+  border: 1.5px solid var(--glass-border);
   box-shadow: var(--shadow-sm);
   min-height: 40px;
 }
@@ -247,13 +262,15 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  min-height: 34px;
+  /* Generous hit area for small fingers on a moving cart (the glyph stays
+     small via font-size; the box is what gets tapped). */
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   border: none;
   background: transparent;
   color: var(--white);
-  font-size: .9rem;
+  font-size: 1rem;
   line-height: 1;
   cursor: pointer;
   border-radius: var(--radius-pill);
@@ -543,16 +560,16 @@ button {
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 25;
-  background: rgba(19,52,63,.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--glass-3);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   color: var(--white);
   font-family: var(--font-fun);
   font-size: clamp(.9rem, 3vw, 1.1rem);
   font-weight: 600;
   padding: 18px 28px;
   border-radius: var(--radius-lg);
-  border: 2px solid rgba(255,255,255,.2);
+  border: 2px solid var(--glass-border);
   box-shadow: var(--shadow-lg);
   text-align: center;
   max-width: 80%;
@@ -568,14 +585,14 @@ button {
   transform: translateX(-50%);
   z-index: 30;
   width: min(94%, 460px);
-  background: rgba(19, 52, 63, .93);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--glass-3);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   color: var(--white);
   font-family: var(--font-fun);
   padding: 14px 16px;
   border-radius: var(--radius-lg);
-  border: 2px solid rgba(255, 255, 255, .2);
+  border: 2px solid var(--glass-border);
   box-shadow: var(--shadow-lg);
   text-align: center;
   pointer-events: none;
@@ -767,12 +784,12 @@ body.no-camera #screen-catch {
   text-shadow: 0 2px 8px rgba(0,0,0,.7);
   text-align: center;
   padding: 10px 20px;
-  background: rgba(13,43,62,.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: var(--glass-2);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border-radius: var(--radius-pill);
   margin-bottom: 16px;
-  border: 1.5px solid rgba(255,255,255,.2);
+  border: 1.5px solid var(--glass-border);
   pointer-events: none;
 }
 
@@ -1064,9 +1081,9 @@ body.no-camera #screen-catch {
 .marley p {
   flex: 1 1 auto;
   min-width: 0;
-  background: rgba(19,52,63,.9);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: var(--glass-3);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   color: var(--white);
   font-family: var(--font-fun);
   font-size: clamp(.9rem, 3.2vw, 1.1rem);
@@ -1074,7 +1091,7 @@ body.no-camera #screen-catch {
   line-height: 1.4;
   padding: 14px 18px;
   border-radius: 18px 18px 18px 4px;
-  border: 1.5px solid rgba(255,255,255,.2);
+  border: 1.5px solid var(--glass-border);
   box-shadow: var(--shadow-lg);
   position: relative;
 }
@@ -1086,7 +1103,7 @@ body.no-camera #screen-catch {
   left: -9px;
   bottom: 14px;
   border: 9px solid transparent;
-  border-right-color: rgba(19,52,63,.9);
+  border-right-color: var(--glass-3);
   border-left-width: 0;
 }
 
@@ -1180,14 +1197,14 @@ body.no-camera #screen-catch {
   gap: 8px;
   padding: 10px 20px;
   border-radius: var(--radius-pill);
-  background: rgba(19,52,63,.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--glass-3);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   color: var(--white);
   font-family: var(--font-fun);
   font-size: clamp(.85rem, 3vw, 1rem);
   font-weight: 700;
-  border: 1.5px solid rgba(255,255,255,.2);
+  border: 1.5px solid var(--glass-border);
   box-shadow: var(--shadow-md);
   white-space: nowrap;
   animation: pop 0.3s cubic-bezier(.36,2,.6,1);
