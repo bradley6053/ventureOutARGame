@@ -387,6 +387,13 @@ button {
   color: rgba(255,255,255,.65);
   text-align: center;
 }
+.title-version {
+  display: block;
+  margin-top: 4px;
+  font-size: .75rem;
+  letter-spacing: .04em;
+  opacity: .6;
+}
 
 
 /* ── 8. MAP SCREEN ──────────────────────────────────────────── */
@@ -426,11 +433,20 @@ button {
   touch-action: none; /* JS handles pan/zoom */
 }
 
+/* The stage is sized by JS to the rendered image box (object-fit:contain math)
+   and centered in the viewport. It carries the pan/zoom transform; the image and
+   all overlays live inside it, so fx/fy fractions map straight onto the picture. */
+#mapStage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
 #mapImg {
   width: 100%;
   height: 100%;
-  object-fit: contain;  /* show the WHOLE resort so kids see all 5 zones + their boat */
-  object-position: center;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;

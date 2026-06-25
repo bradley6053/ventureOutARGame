@@ -66,6 +66,7 @@
     <!-- Footer note -->
     <footer class="title-footer">
       Made for the Venture Out crew 🌴
+      <span id="appVersion" class="title-version"></span>
     </footer>
 
     <!-- Practice Mode toggle — test the GPS map anywhere (e.g. at home) -->
@@ -92,11 +93,15 @@
       </div>
     </div>
 
-    <!-- Map viewport -->
+    <!-- Map viewport. #mapStage is sized to the rendered map image (so fx/fy
+         fractions line up with the picture, not the letter-boxed viewport) and
+         is what JS pans/zooms via transform. -->
     <div id="mapViewport">
-      <img id="mapImg" src="./assets/map/resort-map.jpg" alt="Resort map">
-      <div id="treasureLayer"></div>
-      <div id="playerDot"><div id="facingBeam" aria-hidden="true"></div><span>⛵</span></div>
+      <div id="mapStage">
+        <img id="mapImg" src="./assets/map/resort-map.jpg" alt="Resort map">
+        <div id="treasureLayer"></div>
+        <div id="playerDot"><div id="facingBeam" aria-hidden="true"></div><span>⛵</span></div>
+      </div>
     </div>
 
     <!-- Proximity prompt (floats over map) -->
@@ -117,9 +122,6 @@
       <div id="calPrompt" class="cal-panel__prompt"></div>
       <ul id="calList" class="cal-panel__list"></ul>
       <div id="calControls">
-        <div class="cal-panel__row">
-          <button id="btnCalCapture" type="button" class="btn btn--primary">📍 Capture this spot</button>
-        </div>
         <div class="cal-panel__row">
           <button id="btnCalUndo" type="button" class="btn btn--ghost">↩︎ Undo</button>
           <button id="btnCalCancel" type="button" class="btn btn--ghost">✕ Cancel</button>

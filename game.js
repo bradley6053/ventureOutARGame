@@ -12,6 +12,10 @@
 (() => {
 'use strict';
 
+// App version — shown on the title screen so you can tell which build is live
+// after a refresh. Keep this in step with CACHE_VERSION in sw.js.
+const APP_VERSION = 'v8';
+
 /* ============================================================================
    1. CONFIG  — the one place to change zones, treasures, and tuning.
    ========================================================================== */
@@ -162,6 +166,10 @@ const setText = (id, t) => { const e = $(id); if (e) e.textContent = t; };
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach((s) =>
     s.classList.toggle('screen--active', s.id === id));
+  // The map viewport has no size while hidden, so fit the stage once it's shown.
+  if (id === 'screen-map' && typeof layoutStage === 'function') {
+    requestAnimationFrame(layoutStage);
+  }
 }
 
 /* ============================================================================
@@ -382,6 +390,167 @@ function positionPlayerDot() {
   dot.style.display = '';
   dot.style.left = (playerFrac.fx * 100) + '%';
   dot.style.top  = (playerFrac.fy * 100) + '%';
+}
+
+/* ============================================================================
+   5b. Map stage — fit the image, pan & pinch-zoom.
+   The map image is drawn inside #mapStage, which JS sizes to the actual rendered
+   image box (object-fit:contain math) so a treasure/dot at fx,fy lands on the
+   picture, not the pillar-box margins. #mapStage sits at viewport origin (0,0);
+   its CSS transform = translate(zTX,zTY) scale(zScale) does ALL positioning,
+   so the fit/centering is just the rest position of that transform. Tap math
+   reads the stage's live rect, so it stays correct while zoomed/panned.
+   ========================================================================== */
+const MAP_NAT_W = 378, MAP_NAT_H = 756; // resort-map.jpg natural size (fallback)
+const MAP_MAX_ZOOM = 5;
+let zScale = 1, zTX = 0, zTY = 0;       // current transform of #mapStage
+
+// The image's rendered content box (object-fit:contain) — width/height only.
+function mapContentSize() {
+  const vp = $('mapViewport'), img = $('mapImg');
+  if (!vp || !img) return null;
+  const cw = vp.clientWidth, ch = vp.clientHeight;
+  if (!cw || !ch) return null;
+  const nw = img.naturalWidth || MAP_NAT_W, nh = img.naturalHeight || MAP_NAT_H;
+  const s = Math.min(cw / nw, ch / nh);
+  return { w: nw * s, h: nh * s, cw, ch };
+}
+
+// Size #mapStage to the content box (at origin 0,0) and re-apply the transform.
+function layoutStage() {
+  const sz = mapContentSize(), st = $('mapStage');
+  if (!sz || !st) return;
+  st.style.width = sz.w + 'px';
+  st.style.height = sz.h + 'px';
+  applyZoom();
+}
+
+// Clamp each axis: if the scaled stage is smaller than the viewport, center it;
+// otherwise keep it covering the viewport (no empty gaps). Then write transform.
+function applyZoom() {
+  const sz = mapContentSize(), st = $('mapStage');
+  if (!sz || !st) return;
+  zScale = Math.max(1, Math.min(MAP_MAX_ZOOM, zScale));
+  const clamp = (t, scaled, view) =>
+    scaled <= view ? (view - scaled) / 2 : Math.max(view - scaled, Math.min(0, t));
+  zTX = clamp(zTX, sz.w * zScale, sz.cw);
+  zTY = clamp(zTY, sz.h * zScale, sz.ch);
+  st.style.transform = `translate(${zTX}px, ${zTY}px) scale(${zScale})`;
+}
+
+function resetZoom() { zScale = 1; applyZoom(); } // clamp re-centers at scale 1
+
+// fx,fy fraction of the map image for a screen point — uses the stage's live
+// rect, which already reflects the current pan/zoom, so taps stay accurate.
+function tapFrac(clientX, clientY) {
+  const st = $('mapStage');
+  if (!st) return null;
+  const r = st.getBoundingClientRect();
+  if (!r.width || !r.height) return null;
+  return { fx: (clientX - r.left) / r.width, fy: (clientY - r.top) / r.height };
+}
+
+// Pinch-zoom + drag-to-pan + double-tap-to-reset, via Pointer Events on the
+// viewport. A pan/pinch sets gestureMoved so the trailing click is swallowed and
+// never fires a treasure catch or a stray calibration point.
+let gestureMoved = false;
+function setupMapGestures() {
+  const vp = $('mapViewport');
+  if (!vp) return;
+  const pts = new Map();              // active pointers: id -> {x,y}
+  let start = null, lastTapAt = 0;
+  const DRAG_THRESH = 8;
+
+  const vpOrigin = () => { const r = vp.getBoundingClientRect(); return { x: r.left, y: r.top }; };
+  const twoFinger = () => {
+    const a = [...pts.values()];
+    return { dist: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1,
+             mx: (a[0].x + a[1].x) / 2, my: (a[0].y + a[1].y) / 2 };
+  };
+
+  // Capture the pointer only once a real gesture starts, so clean taps still let
+  // treasure buttons receive their click.
+  const capture = (id) => { try { vp.setPointerCapture(id); } catch (_) {} };
+
+  vp.addEventListener('pointerdown', (e) => {
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) {
+      const t = twoFinger();
+      start = { kind: 'pinch', dist: t.dist, scale: zScale, tx: zTX, ty: zTY,
+                mx: t.mx, my: t.my };
+      for (const id of pts.keys()) capture(id);
+      gestureMoved = true; // a two-finger touch is never a tap
+    } else if (pts.size === 1) {
+      gestureMoved = false;
+      start = { kind: 'pan', x: e.clientX, y: e.clientY, tx: zTX, ty: zTY };
+    }
+  });
+
+  vp.addEventListener('pointermove', (e) => {
+    if (!pts.has(e.pointerId) || !start) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size >= 2 && start.kind === 'pinch') {
+      // Scale about the pinch midpoint: keep the stage point under the midpoint
+      // fixed, then add the midpoint's own drift (two-finger pan).
+      const t = twoFinger();
+      const o = vpOrigin();
+      const ns = Math.max(1, Math.min(MAP_MAX_ZOOM, start.scale * (t.dist / start.dist)));
+      const k = ns / start.scale;
+      const sx0 = start.mx - o.x, sy0 = start.my - o.y; // start midpoint in viewport space
+      const sx1 = t.mx - o.x, sy1 = t.my - o.y;         // current midpoint
+      zTX = sx1 - k * (sx0 - start.tx);
+      zTY = sy1 - k * (sy0 - start.ty);
+      zScale = ns;
+      applyZoom();
+    } else if (pts.size === 1 && start.kind === 'pan') {
+      const dx = e.clientX - start.x, dy = e.clientY - start.y;
+      if (!gestureMoved && Math.hypot(dx, dy) > DRAG_THRESH) {
+        gestureMoved = true;
+        capture(e.pointerId);
+      }
+      if (gestureMoved && zScale > 1) {
+        zTX = start.tx + dx; zTY = start.ty + dy;
+        applyZoom();
+      }
+    }
+  });
+
+  const endPointer = (e) => {
+    if (!pts.has(e.pointerId)) return;
+    const wasTap = pts.size === 1 && !gestureMoved;
+    pts.delete(e.pointerId);
+    try { vp.releasePointerCapture(e.pointerId); } catch (_) {}
+    if (pts.size === 1) {
+      // A finger lifted from a pinch — continue panning with the one that's left.
+      const [only] = [...pts.values()];
+      start = { kind: 'pan', x: only.x, y: only.y, tx: zTX, ty: zTY };
+    } else if (pts.size === 0) {
+      start = null;
+    }
+    if (wasTap) {
+      // Double-tap on empty map (not a treasure) resets the zoom.
+      const now = performance.now();
+      if (now - lastTapAt < 300 && !e.target.closest('.treasure')) {
+        resetZoom();
+        gestureMoved = true; // swallow the click that follows the reset tap
+      }
+      lastTapAt = now;
+    }
+  };
+  vp.addEventListener('pointerup', endPointer);
+  vp.addEventListener('pointercancel', endPointer);
+
+  // Swallow the click synthesized after a pan/pinch so it doesn't catch a
+  // treasure or drop a calibration point.
+  vp.addEventListener('click', (e) => {
+    if (gestureMoved) { e.stopPropagation(); e.preventDefault(); gestureMoved = false; }
+  }, true);
+
+  // Keep the stage fitted as the viewport changes.
+  window.addEventListener('resize', layoutStage);
+  window.addEventListener('orientationchange', layoutStage);
+  const img = $('mapImg');
+  if (img) { if (img.complete) layoutStage(); img.addEventListener('load', layoutStage); }
 }
 
 /* ============================================================================
@@ -696,16 +865,15 @@ function renderBag() {
 
 /* ============================================================================
    10. On-site "Set Up the Map" — capture a few fixed landmarks, solve an affine.
-   A grown-up does this ONCE: stand at a landmark, press Capture (GPS is averaged
-   over a few seconds), then tap that landmark on the map. Repeat for 3 spread-out
-   spots, then Save. Every fix is shown with its accuracy and nothing fails silently.
+   A grown-up does this ONCE: stand right at a landmark and TAP that landmark on
+   the map — your live GPS (averaged from the last few fixes) is recorded on the
+   spot. Repeat for 3 spread-out spots, then Save. Pinch to zoom in for a precise
+   tap. Every fix is shown with its accuracy and nothing fails silently.
    ========================================================================== */
 let calibrating = false;
-let calStage = 'idle';        // 'idle' | 'averaging' | 'await-tap' | 'done'
+let calStage = 'idle';        // 'idle' | 'done'
 let calPoints = [];           // [{lat,lng,acc,fx,fy}]
-let calSamples = [];          // GPS fixes collected during averaging
-let calPendingFix = null;     // averaged {lat,lng,acc} waiting for a map tap
-let calAvgTimer = null;
+let calRecent = [];           // rolling buffer of the last few GPS fixes
 let calPrevCalibration = null;// restored on Cancel
 let liveFix = null;           // latest {lat,lng,acc} while calibrating
 
@@ -714,8 +882,7 @@ const CAL_LANDMARKS = [
   'the MAIN ENTRANCE / VENTURE OUT sign (bottom)',
   'the TENNIS COURTS or POOL (middle, off to one side)',
 ];
-const CAL_AVG_MS = 5000;      // how long to average GPS at each spot
-const CAL_AVG_MAX = 8;        // stop early once we have this many samples
+const CAL_RECENT_MAX = 5;     // how many recent fixes to average on a tap
 
 function nextLandmark() { return CAL_LANDMARKS[calPoints.length] || 'another spread-out spot'; }
 
@@ -724,10 +891,8 @@ function startCalibrate() {
   calibrating = true;
   calStage = 'idle';
   calPoints = [];
-  calSamples = [];
-  calPendingFix = null;
+  calRecent = [];
   calPrevCalibration = state.calibration;
-  clearTimeout(calAvgTimer);
   hide($('calExportWrap'));
   show($('calControls'));
   // Reopen in a known place: clear any dragged position / minimized state.
@@ -742,78 +907,49 @@ function startCalibrate() {
   if (minBtn) { minBtn.textContent = '▾'; minBtn.setAttribute('aria-label', 'Minimize panel'); minBtn.title = 'Minimize'; }
   show($('calPanel'));
   renderCalPanel();
-  marley("Let's set up the map! Stand at a landmark and press Capture. 📍", 6000);
+  marley("Let's set up the map! Stand at a landmark and TAP it on the map. 📍", 6000);
 }
 
 // Called from onPosition on every GPS fix while calibrating.
 function onCalibrateFix(lat, lng, acc) {
   liveFix = { lat, lng, acc: (typeof acc === 'number' && acc > 0) ? acc : 99 };
-  if (calStage === 'averaging') {
-    calSamples.push(liveFix);
-    renderCalPanel();
-    if (calSamples.length >= CAL_AVG_MAX) finishAveraging();
-  } else {
-    updateCalGauge();
-  }
 }
 
-function calStartCapture() {
-  if (!calibrating || calStage === 'averaging') return;
-  if (!liveFix) { marley('Waiting for GPS… give it a few seconds, then press Capture. 📡', 5000); return; }
-  calStage = 'averaging';
-  calSamples = [];
-  calPendingFix = null;
-  renderCalPanel();
-  clearTimeout(calAvgTimer);
-  calAvgTimer = setTimeout(finishAveraging, CAL_AVG_MS);
+// Average the last few GPS fixes for a stable reading at the tap moment.
+function currentCalFix() {
+  const src = calRecent.length ? calRecent : (liveFix ? [liveFix] : []);
+  if (!src.length) return null;
+  return {
+    lat: mean(src.map((s) => s.lat)),
+    lng: mean(src.map((s) => s.lng)),
+    acc: Math.min.apply(null, src.map((s) => s.acc)),
+  };
 }
 
-function finishAveraging() {
-  clearTimeout(calAvgTimer);
-  if (!calSamples.length) {
-    calStage = 'idle';
-    marley('No GPS yet — wait for signal, then press Capture. 📡', 5000);
-    renderCalPanel();
-    return;
-  }
-  const lat = mean(calSamples.map((s) => s.lat));
-  const lng = mean(calSamples.map((s) => s.lng));
-  const acc = Math.min.apply(null, calSamples.map((s) => s.acc));
-  calPendingFix = { lat, lng, acc };
-  calStage = 'await-tap';
-  renderCalPanel();
-  if (acc > 25) marley(`GPS is weak (±${Math.round(acc)} m). You can still tap, or move to open sky and re-capture.`, 6000);
-}
-
-// Map taps: during set-up they place the just-captured landmark.
+// Map taps during set-up: record THIS landmark using the live GPS, no separate
+// Capture step. Stand at the landmark, tap it on the map. Pinch to zoom for
+// precision — tapFrac uses the live stage rect so it stays accurate while zoomed.
 function onMapTap(ev) {
   if (!calibrating) return;
-  if (calStage === 'averaging') { marley('Hold still — reading GPS… 📡', 2500); return; }
-  if (calStage !== 'await-tap') { marley('Press “Capture this spot” at a landmark first. 📍', 3500); return; }
-  if (!calPendingFix) { marley('Waiting for GPS — press Capture again. 📡', 3500); return; }
-  const vp = $('mapViewport');
-  if (!vp) return;
-  const r = vp.getBoundingClientRect();
-  const fx = (ev.clientX - r.left) / r.width;
-  const fy = (ev.clientY - r.top) / r.height;
-  calPoints.push({ lat: calPendingFix.lat, lng: calPendingFix.lng, acc: calPendingFix.acc, fx, fy });
-  calPendingFix = null;
-  calStage = 'idle';
+  const fix = currentCalFix();
+  if (!fix) { marley('Waiting for GPS — give it a few seconds, then tap. 📡', 4000); return; }
+  const f = tapFrac(ev.clientX, ev.clientY);
+  if (!f) return;
+  calPoints.push({ lat: fix.lat, lng: fix.lng, acc: fix.acc, fx: f.fx, fy: f.fy });
   playTap();
   renderCalPanel();
+  if (fix.acc > 25) marley(`Recorded, but GPS is weak (±${Math.round(fix.acc)} m). For best results move to open sky.`, 5000);
 }
 
 function calUndo() {
-  if (calStage === 'await-tap') { calStage = 'idle'; calPendingFix = null; renderCalPanel(); return; }
   if (calPoints.length) calPoints.pop();
   renderCalPanel();
 }
 
 function calCancel() {
-  clearTimeout(calAvgTimer);
   calibrating = false;
   calStage = 'idle';
-  calPoints = []; calSamples = []; calPendingFix = null;
+  calPoints = []; calRecent = [];
   state.calibration = calPrevCalibration;
   hide($('calPanel'));
   marley('Set-up canceled. 👍', 3000);
@@ -942,10 +1078,8 @@ function renderCalPanel() {
   const promptEl = $('calPrompt');
   if (promptEl) {
     let txt;
-    if (calStage === 'done')          txt = '🎉 Saved! Copy the code to bake it in, or press Done.';
-    else if (calStage === 'averaging')txt = `Hold still — reading GPS… (${calSamples.length}/${CAL_AVG_MAX})`;
-    else if (calStage === 'await-tap')txt = `Now TAP ${nextLandmark()} on the map. 👆`;
-    else                              txt = `Stand at ${nextLandmark()}, then press Capture. 📍`;
+    if (calStage === 'done') txt = '🎉 Saved! Copy the code to bake it in, or press Done.';
+    else txt = `Stand at ${nextLandmark()} and TAP it on the map. 👆 (pinch to zoom in)`;
     promptEl.textContent = txt;
   }
   const list = $('calList');
@@ -958,19 +1092,14 @@ function renderCalPanel() {
       list.appendChild(li);
     });
   }
-  const isDone = calStage === 'done';
-  const cap = $('btnCalCapture'), undo = $('btnCalUndo'), solve = $('btnCalSolve');
-  if (cap) {
-    cap.disabled = calStage === 'averaging';
-    cap.textContent = calStage === 'await-tap' ? '📍 Re-capture' : '📍 Capture this spot';
-  }
-  if (undo) undo.disabled = !calPoints.length && calStage !== 'await-tap';
+  const undo = $('btnCalUndo'), solve = $('btnCalSolve');
+  if (undo) undo.disabled = !calPoints.length;
   if (solve) {
     const enough = calPoints.length >= 3;
     solve.disabled = !enough;
     setText('calSolveHint', enough
       ? 'Ready to save! ✅'
-      : `Capture ${3 - calPoints.length} more spread-out spot(s) to enable Save.`);
+      : `Tap ${3 - calPoints.length} more spread-out spot(s) to enable Save.`);
   }
 }
 
@@ -1290,7 +1419,6 @@ function bindUI() {
   on($('btnOpenBag'), 'click', () => { playTap(); renderBag(); showScreen('screen-bag'); });
   on($('btnBagBack'), 'click', () => { playTap(); showScreen('screen-map'); });
   on($('btnCalibrate'), 'click', () => { playTap(); startCalibrate(); });
-  on($('btnCalCapture'), 'click', () => { playTap(); calStartCapture(); });
   on($('btnCalUndo'), 'click', () => { playTap(); calUndo(); });
   on($('btnCalCancel'), 'click', () => { playTap(); calCancel(); });
   on($('btnCalSolve'), 'click', () => { playTap(); calSolve(); });
@@ -1298,6 +1426,7 @@ function bindUI() {
   on($('btnCalDone'), 'click', () => { playTap(); calDone(); });
   on($('btnCalMin'), 'click', () => { playTap(); calToggleMin(); });
   setupCalDrag();
+  setupMapGestures();
   on($('btnWeMadeIt'), 'click', () => { playTap(); advanceZone(); });
   on($('btnCatchBack'), 'click', () => { playTap(); pendingCatch = null; endAr(); showScreen('screen-map'); });
   on($('btnSafetyOk'), 'click', () => { playTap(); hide($('safetyCard')); });
@@ -1325,6 +1454,7 @@ function boot() {
   updateHUD();
   updatePracticeBtn();
   setText('zoneName', zone().name);
+  setText('appVersion', APP_VERSION);
   showScreen('screen-title');
 }
 
